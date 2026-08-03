@@ -290,9 +290,13 @@ CRITICAL REMINDERS:
 - Strengthened justification MUST be 300-450 chars (English).`;
 
     // 5. Call Z.ai API
+    // Z.ai requires an explicit `model` in the body, otherwise it returns
+    // {"error":{"code":"500}}. Use ZAI_MODEL if provided, default to glm-4.6.
+    const model = process.env.ZAI_MODEL || "glm-4.6";
     let response;
     try {
       response = await zai.chat.completions.create({
+        model,
         messages: [
           { role: "system", content: systemPrompt },
           {
@@ -314,14 +318,30 @@ CRITICAL REMINDERS:
       );
     }
 
-    // 6. Extract content from response
+    // 6. Detect Z.ai error envelope even on HTTP 200 (e.g. {"error":{"code":"500"}})
+    if (response?.error) {
+      return errorResponse(
+        "El API de Z.ai devolvio un error en el cuerpo de la respuesta.",
+        502,
+        {
+          modelUsed: process.env.ZAI_MODEL || "glm-4.6",
+          apiError: response.error,
+          fullResponse: JSON.stringify(response).slice(0, 1000),
+        }
+      );
+    }
+
+    // 7. Extract content from response
     const content = response?.choices?.[0]?.message?.content || "";
 
     if (!content.trim()) {
       return errorResponse(
         "El API de Z.ai devolvio una respuesta vacia.",
         502,
-        `Respuesta recibida: ${JSON.stringify(response).slice(0, 500)}`
+        {
+          modelUsed: process.env.ZAI_MODEL || "glm-4.6",
+          responseReceived: JSON.stringify(response).slice(0, 1000),
+        }
       );
     }
 
