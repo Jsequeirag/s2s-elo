@@ -1,8 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs/promises";
-import os from "os";
-import path from "path";
-import ZAI from "z-ai-web-dev-sdk";
 import { instructions as instructionsContent } from "@/lib/instructions";
 import { guide as guideContent } from "@/lib/guide";
 
@@ -19,48 +15,59 @@ function loadReferenceFiles() {
 }
 
 /**
- * The Z.ai SDK (`ZAI.create()`) reads a `.z-ai-config` JSON file from disk via
- * `loadConfig()`, which searches `process.cwd()`, `os.homedir()`, and `/etc/`.
- * It does NOT support environment variables directly, and its constructor is
- * private so it cannot be instantiated directly either.
+ * Calls the OpenRouter Chat Completions API (OpenAI-compatible).
+ * Requires OPENROUTER_API_KEY in the environment. The model defaults to
+ * DeepSeek V4 Flash and can be overridden via OPENROUTER_MODEL.
  *
- * On serverless platforms (Vercel), the project directory is READ-ONLY. The
- * only writable location is `/tmp` (or the OS temp dir). So we:
- *   1. Write the config file into the OS temp directory.
- *   2. `chdir` into that directory so `loadConfig()` finds it via `process.cwd()`.
+ * Docs: https://openrouter.ai/docs
  */
-async function createZaiClient() {
-  const baseUrl = process.env.ZAI_BASE_URL;
-  const apiKey = process.env.ZAI_API_KEY;
+async function callOpenRouter(
+  systemPrompt: string,
+  userPrompt: string,
+  temperature: number
+) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  const model = process.env.OPENROUTER_MODEL || "deepseek/deepseek-v4-flash";
 
-  if (!baseUrl || !apiKey) {
+  if (!apiKey) {
     throw new Error(
-      `Faltan variables de entorno: ZAI_BASE_URL=${baseUrl ? "OK" : "FALTA"}, ZAI_API_KEY=${apiKey ? "OK" : "FALTA"}. Configuralas en Vercel > Settings > Environment Variables.`
+      "Falta OPENROUTER_API_KEY. Configurala en Vercel > Settings > Environment Variables."
     );
   }
 
-  // Use the OS temp dir — the only writable location on serverless (Vercel = /tmp).
-  const tmpDir = os.tmpdir();
-  const configPath = path.join(tmpDir, ".z-ai-config");
-  const configContent = JSON.stringify({ baseUrl, apiKey });
+  const res = await fetch(
+    "https://openrouter.ai/api/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        // Optional but recommended by OpenRouter for analytics/routing.
+        "HTTP-Referer": "https://s2s-elo.vercel.app",
+        "X-Title": "Live S2S ELO Evaluator",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature,
+        // Lower max_tokens keeps cost down and forces concise output.
+        max_tokens: 2000,
+      }),
+    }
+  );
 
-  try {
-    await fs.writeFile(configPath, configContent, "utf-8");
-  } catch (writeError) {
+  if (!res.ok) {
+    const errorBody = await res.text();
     throw new Error(
-      `No se pudo escribir .z-ai-config en ${configPath}: ${writeError instanceof Error ? writeError.message : String(writeError)}`
+      `OpenRouter API ${res.status}: ${errorBody.slice(0, 500)}`
     );
   }
 
-  // Move cwd into tmpDir so the SDK's loadConfig() picks up the file we wrote.
-  const previousCwd = process.cwd();
-  try {
-    process.chdir(tmpDir);
-    return await ZAI.create();
-  } finally {
-    // Restore cwd so we don't leak process state across invocations.
-    process.chdir(previousCwd);
-  }
+  const data = await res.json();
+  return { data, model };
 }
 
 const SUBDIMENSION_CRITERIA = [
@@ -218,20 +225,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Initialize Z.ai client
-    let zai;
-    try {
-      zai = await createZaiClient();
-    } catch (configError) {
-      return errorResponse(
-        "Error de configuracion del API de Z.ai.",
-        503,
-        configError instanceof Error ? configError.message : String(configError)
-      );
-    }
-
-    // 4. Build prompt from reference files + output schema
-    const { instructions, guide } = await loadReferenceFiles();
+    // 3. Build prompt from reference files + output schema
+    const { instructions, guide } = loadReferenceFiles();
 
     const systemPrompt = `You are an expert auditor for Live S2S (Speech-to-Speech) AI voice model evaluation. You analyze evaluator justifications written in Spanish, translate and strengthen them into English, and produce a structured vote analysis that is a PERFECT mirror of what the justification says.
 
@@ -289,61 +284,52 @@ CRITICAL REMINDERS:
 - If the text mentions clicks, restarts, pauses, or cuts → mark techIssues. If audio quality is equal → audioQuality = "Tie".
 - Strengthened justification MUST be 300-450 chars (English).`;
 
-    // 5. Call Z.ai API
-    // Z.ai requires an explicit `model` in the body, otherwise it returns
-    // {"error":{"code":"500}}. Use ZAI_MODEL if provided, default to glm-4.6.
-    const model = process.env.ZAI_MODEL || "glm-4.6";
-    let response;
+    // 4. Call OpenRouter API
+    let data;
+    let modelUsed;
     try {
-      response = await zai.chat.completions.create({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: `Analyze this justification and determine the votes:
+      const result = await callOpenRouter(
+        systemPrompt,
+        `Analyze this justification and determine the votes:
 
 """${justification}"""`,
-          },
-        ],
-        temperature: 0.1,
-      });
+        0.1
+      );
+      data = result.data;
+      modelUsed = result.model;
     } catch (apiError) {
       const msg =
         apiError instanceof Error ? apiError.message : String(apiError);
+      const status = msg.startsWith("OpenRouter API 401") || msg.startsWith("OpenRouter API 403")
+        ? 503
+        : 502;
       return errorResponse(
-        "Error al comunicarse con el API de Z.ai.",
-        502,
-        `Detalle: ${msg}`
+        "Error al comunicarse con OpenRouter.",
+        status,
+        msg
       );
     }
 
-    // 6. Detect Z.ai error envelope even on HTTP 200 (e.g. {"error":{"code":"500"}})
-    if (response?.error) {
+    // 5. Detect error envelope in the body
+    if (data?.error) {
       return errorResponse(
-        "El API de Z.ai devolvio un error en el cuerpo de la respuesta.",
+        "OpenRouter devolvio un error en el cuerpo de la respuesta.",
         502,
-        {
-          modelUsed: process.env.ZAI_MODEL || "glm-4.6",
-          apiError: response.error,
-          fullResponse: JSON.stringify(response).slice(0, 1000),
-        }
+        { modelUsed, apiError: data.error }
       );
     }
 
-    // 7. Extract content from response
-    const content = response?.choices?.[0]?.message?.content || "";
+    // 6. Extract content
+    const content = data?.choices?.[0]?.message?.content || "";
 
     if (!content.trim()) {
       return errorResponse(
-        "El API de Z.ai devolvio una respuesta vacia.",
+        "OpenRouter devolvio una respuesta vacia.",
         502,
-        {
-          modelUsed: process.env.ZAI_MODEL || "glm-4.6",
-          responseReceived: JSON.stringify(response).slice(0, 1000),
-        }
+        { modelUsed, responseReceived: JSON.stringify(data).slice(0, 1000) }
       );
     }
+
 
     // 7. Parse JSON from response
     let jsonStr = content.trim();
