@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs/promises";
+import os from "os";
 import path from "path";
 import ZAI from "z-ai-web-dev-sdk";
 
 /**
- * The Z.ai SDK (`ZAI.create()`) reads a `.z-ai-config` JSON file from disk.
- * It does NOT support environment variables directly. To keep secrets out of
- * the repo while still configuring the SDK via env vars, we write the config
- * file at runtime (into the OS temp dir) from `ZAI_BASE_URL` and `ZAI_API_KEY`
- * before instantiating the client.
+ * The Z.ai SDK (`ZAI.create()`) reads a `.z-ai-config` JSON file from disk via
+ * `loadConfig()`, which searches `process.cwd()`, `os.homedir()`, and `/etc/`.
+ * It does NOT support environment variables directly, and its constructor is
+ * private so it cannot be instantiated directly either.
+ *
+ * On serverless platforms (Vercel), the project directory is READ-ONLY. The
+ * only writable location is `/tmp` (or the OS temp dir). So we:
+ *   1. Write the config file into the OS temp directory.
+ *   2. `chdir` into that directory so `loadConfig()` finds it via `process.cwd()`.
  */
 async function createZaiClient() {
   const baseUrl = process.env.ZAI_BASE_URL;
@@ -20,20 +25,28 @@ async function createZaiClient() {
     );
   }
 
-  // Write the config file the SDK expects into a temp directory.
-  const configPath = path.join(process.cwd(), ".z-ai-config");
+  // Use the OS temp dir — the only writable location on serverless (Vercel = /tmp).
+  const tmpDir = os.tmpdir();
+  const configPath = path.join(tmpDir, ".z-ai-config");
   const configContent = JSON.stringify({ baseUrl, apiKey });
 
   try {
     await fs.writeFile(configPath, configContent, "utf-8");
   } catch (writeError) {
     throw new Error(
-      `No se pudo escribir el archivo de configuracion .z-ai-config en ${configPath}: ${writeError instanceof Error ? writeError.message : String(writeError)}`
+      `No se pudo escribir .z-ai-config en ${configPath}: ${writeError instanceof Error ? writeError.message : String(writeError)}`
     );
   }
 
-  // `create()` reads the file we just wrote.
-  return await ZAI.create();
+  // Move cwd into tmpDir so the SDK's loadConfig() picks up the file we wrote.
+  const previousCwd = process.cwd();
+  try {
+    process.chdir(tmpDir);
+    return await ZAI.create();
+  } finally {
+    // Restore cwd so we don't leak process state across invocations.
+    process.chdir(previousCwd);
+  }
 }
 
 const SUBDIMENSION_CRITERIA = [
