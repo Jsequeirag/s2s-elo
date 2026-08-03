@@ -3,6 +3,20 @@ import fs from "fs/promises";
 import os from "os";
 import path from "path";
 import ZAI from "z-ai-web-dev-sdk";
+import { instructions as instructionsContent } from "@/lib/instructions";
+import { guide as guideContent } from "@/lib/guide";
+
+/**
+ * Reference files are imported as raw strings at build time (via .ts modules
+ * that export template-literal strings) so they are always available inside
+ * the serverless bundle on Vercel. No runtime fs.readFile needed.
+ */
+function loadReferenceFiles() {
+  return {
+    instructions: instructionsContent,
+    guide: guideContent,
+  };
+}
 
 /**
  * The Z.ai SDK (`ZAI.create()`) reads a `.z-ai-config` JSON file from disk via
@@ -216,18 +230,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. Build prompt
-    const systemPrompt = `You are an expert auditor for Live S2S (Speech-to-Speech) AI voice model evaluation. You analyze evaluator justifications written in Spanish and produce a structured vote analysis.
+    // 4. Build prompt from reference files + output schema
+    const { instructions, guide } = await loadReferenceFiles();
 
-YOUR STRICT RULES:
-1. The evaluator writes a justification in Spanish. You must analyze it and determine what votes it implies.
-2. You must output ONLY valid JSON, no markdown, no code fences, no extra text.
-3. Apply the Instruction rules: if the text mentions clicks, restarts, pauses, or cuts → mark techIssues. If audio quality is equal → audioQuality = "Tie".
-4. Task Success: "pass" (completed task), "partial" (omitted something/inaccurate), "fail" (refused/didn't understand). NEVER mark fail just because it sounded fake.
-5. Conversational Dynamics: penalize if the model used "Helpful Assistant" phrases.
-6. The "mirror rule": checkboxes MUST be an exact mirror of what the justification says.
+    const systemPrompt = `You are an expert auditor for Live S2S (Speech-to-Speech) AI voice model evaluation. You analyze evaluator justifications written in Spanish, translate and strengthen them into English, and produce a structured vote analysis that is a PERFECT mirror of what the justification says.
 
-OUTPUT FORMAT (JSON only):
+You MUST follow the rules and reference material below. They define how to translate, strengthen, and vote.
+
+====================
+EVALUATION INSTRUCTIONS (aplicar obligatoriamente)
+====================
+${instructions}
+
+====================
+EVALUATION GUIDE (jerarquia, trade-offs, taxonomia, errores)
+====================
+${guide}
+
+====================
+OUTPUT CONTRACT
+====================
+You must output ONLY valid JSON — no markdown, no code fences, no extra text before or after.
+
+The JSON MUST match this exact schema:
 {
   "strengthenedJustification": "<English translation, 300-450 chars, professional tone, 3-part structure: verdict+winning dimension, comparison of utility, trade-off/technical detail>",
   "diagnosis": "<Brief explanation in Spanish of what was improved and why it meets Exceptional standards, plus character count>",
@@ -256,7 +281,13 @@ OUTPUT FORMAT (JSON only):
     { "id": "locale-mismatch", "A": true|false, "B": true|false },
     { "id": "gender-grammar", "A": true|false, "B": true|false }
   ]
-}`;
+}
+
+CRITICAL REMINDERS:
+- Apply the "mirror rule": every checkbox / vote MUST be an exact mirror of what the justification says. No contradictions.
+- Never mark Task Success = "fail" just because the model sounded fake — that is a Naturalness penalty.
+- If the text mentions clicks, restarts, pauses, or cuts → mark techIssues. If audio quality is equal → audioQuality = "Tie".
+- Strengthened justification MUST be 300-450 chars (English).`;
 
     // 5. Call Z.ai API
     let response;
