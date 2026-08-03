@@ -161,7 +161,15 @@ export default function Home() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Error desconocido.");
+        const errorDetail =
+          data.details
+            ? typeof data.details === "string"
+              ? data.details
+              : JSON.stringify(data.details, null, 2)
+            : null;
+        setError(
+          `${data.error || "Error desconocido."}${errorDetail ? `\n\nDetalles: ${errorDetail}` : ""}`
+        );
         return;
       }
 
@@ -286,9 +294,9 @@ export default function Home() {
               </Button>
             </div>
             {error && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm whitespace-pre-wrap break-words">
                 <AlertCircle className="size-4 mt-0.5 shrink-0" />
-                {error}
+                <span>{error}</span>
               </div>
             )}
           </CardContent>

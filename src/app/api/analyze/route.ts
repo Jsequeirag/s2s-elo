@@ -1,16 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
+import fs from "fs/promises";
+import path from "path";
 import ZAI from "z-ai-web-dev-sdk";
 
-function createZaiClient() {
+/**
+ * The Z.ai SDK (`ZAI.create()`) reads a `.z-ai-config` JSON file from disk.
+ * It does NOT support environment variables directly. To keep secrets out of
+ * the repo while still configuring the SDK via env vars, we write the config
+ * file at runtime (into the OS temp dir) from `ZAI_BASE_URL` and `ZAI_API_KEY`
+ * before instantiating the client.
+ */
+async function createZaiClient() {
   const baseUrl = process.env.ZAI_BASE_URL;
   const apiKey = process.env.ZAI_API_KEY;
 
   if (!baseUrl || !apiKey) {
-    throw new Error("ZAI_BASE_URL and ZAI_API_KEY environment variables are required.");
+    throw new Error(
+      `Faltan variables de entorno: ZAI_BASE_URL=${baseUrl ? "OK" : "FALTA"}, ZAI_API_KEY=${apiKey ? "OK" : "FALTA"}. Configuralas en Vercel > Settings > Environment Variables.`
+    );
   }
 
-  // Bypass loadConfig() by constructing ZAI directly with env vars
-  return new ZAI({ baseUrl, apiKey });
+  // Write the config file the SDK expects into a temp directory.
+  const configPath = path.join(process.cwd(), ".z-ai-config");
+  const configContent = JSON.stringify({ baseUrl, apiKey });
+
+  try {
+    await fs.writeFile(configPath, configContent, "utf-8");
+  } catch (writeError) {
+    throw new Error(
+      `No se pudo escribir el archivo de configuracion .z-ai-config en ${configPath}: ${writeError instanceof Error ? writeError.message : String(writeError)}`
+    );
+  }
+
+  // `create()` reads the file we just wrote.
+  return await ZAI.create();
 }
 
 const SUBDIMENSION_CRITERIA = [
@@ -124,20 +147,63 @@ interface AnalysisResponse {
   }[];
 }
 
+function errorResponse(message: string, status: number, details?: unknown) {
+  console.error(`[API /api/analyze] ${status}: ${message}`, details || "");
+  return NextResponse.json(
+    {
+      error: message,
+      details: details ?? null,
+      timestamp: new Date().toISOString(),
+    },
+    { status }
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const body: AnalysisRequest = await req.json();
-    const { justification } = body;
-
-    if (!justification || justification.trim().length < 20) {
-      return NextResponse.json(
-        { error: "La justificación debe tener al menos 20 caracteres." },
-        { status: 400 }
+    // 1. Parse request body
+    let body: AnalysisRequest;
+    try {
+      body = await req.json();
+    } catch {
+      return errorResponse(
+        "El cuerpo de la solicitud no es JSON valido.",
+        400,
+        "Asegurate de enviar { \"justification\": \"tu texto aqui\" }"
       );
     }
 
-    const zai = createZaiClient();
+    const { justification } = body;
 
+    // 2. Validate justification
+    if (!justification || typeof justification !== "string") {
+      return errorResponse(
+        "El campo 'justification' es obligatorio y debe ser texto.",
+        400,
+        "Envia: { \"justification\": \"texto de al menos 20 caracteres\" }"
+      );
+    }
+
+    if (justification.trim().length < 20) {
+      return errorResponse(
+        `La justificacion debe tener al menos 20 caracteres. Recibidos: ${justification.trim().length}.`,
+        400
+      );
+    }
+
+    // 3. Initialize Z.ai client
+    let zai;
+    try {
+      zai = await createZaiClient();
+    } catch (configError) {
+      return errorResponse(
+        "Error de configuracion del API de Z.ai.",
+        503,
+        configError instanceof Error ? configError.message : String(configError)
+      );
+    }
+
+    // 4. Build prompt
     const systemPrompt = `You are an expert auditor for Live S2S (Speech-to-Speech) AI voice model evaluation. You analyze evaluator justifications written in Spanish and produce a structured vote analysis.
 
 YOUR STRICT RULES:
@@ -179,24 +245,44 @@ OUTPUT FORMAT (JSON only):
   ]
 }`;
 
-    const response = await zai.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: `Analyze this justification and determine the votes:
+    // 5. Call Z.ai API
+    let response;
+    try {
+      response = await zai.chat.completions.create({
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: `Analyze this justification and determine the votes:
 
 """${justification}"""`,
-        },
-      ],
-      temperature: 0.1,
-    });
+          },
+        ],
+        temperature: 0.1,
+      });
+    } catch (apiError) {
+      const msg =
+        apiError instanceof Error ? apiError.message : String(apiError);
+      return errorResponse(
+        "Error al comunicarse con el API de Z.ai.",
+        502,
+        `Detalle: ${msg}`
+      );
+    }
 
-    const content = response.choices[0]?.message?.content || "";
+    // 6. Extract content from response
+    const content = response?.choices?.[0]?.message?.content || "";
 
-    // Try to parse JSON from the response
+    if (!content.trim()) {
+      return errorResponse(
+        "El API de Z.ai devolvio una respuesta vacia.",
+        502,
+        `Respuesta recibida: ${JSON.stringify(response).slice(0, 500)}`
+      );
+    }
+
+    // 7. Parse JSON from response
     let jsonStr = content.trim();
-    // Remove markdown code fences if present
     const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (fenceMatch) {
       jsonStr = fenceMatch[1].trim();
@@ -205,23 +291,26 @@ OUTPUT FORMAT (JSON only):
     let analysis;
     try {
       analysis = JSON.parse(jsonStr);
-    } catch {
-      return NextResponse.json(
+    } catch (parseError) {
+      return errorResponse(
+        "No se pudo interpretar la respuesta del API como JSON.",
+        422,
         {
-          error:
-            "No se pudo analizar la justificación. Intenta con un texto más claro y específico.",
-          raw: content,
-        },
-        { status: 422 }
+          sugerencia:
+            "Intenta con un texto mas claro y especifico en la justificacion.",
+          rawContent: content.slice(0, 1000),
+          parseError:
+            parseError instanceof Error
+              ? parseError.message
+              : String(parseError),
+        }
       );
     }
 
-    // Merge subdimensions with full criteria info
-    const subdimensionMap = new Map(
-      analysis.subdimensions?.map((s: { id: string; A: boolean; B: boolean }) => [
-        s.id,
-        s,
-      ]) || []
+    // 8. Merge subdimensions with full criteria info
+    type SubdimVote = { id: string; A: boolean; B: boolean };
+    const subdimensionMap = new Map<string, SubdimVote>(
+      ((analysis.subdimensions as SubdimVote[]) || []).map((s) => [s.id, s])
     );
 
     const fullSubdimensions = SUBDIMENSION_CRITERIA.map((c) => {
@@ -236,9 +325,9 @@ OUTPUT FORMAT (JSON only):
       };
     });
 
+    // 9. Build final result
     const result: AnalysisResponse = {
-      strengthenedJustification:
-        analysis.strengthenedJustification || "",
+      strengthenedJustification: analysis.strengthenedJustification || "",
       diagnosis: analysis.diagnosis || "",
       charCount: analysis.charCount || 0,
       dimensions: analysis.dimensions || {
@@ -259,12 +348,19 @@ OUTPUT FORMAT (JSON only):
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error("Analysis error:", error);
-    return NextResponse.json(
+    // Last-resort catch for unexpected errors
+    const msg = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+
+    console.error("[API /api/analyze] UNEXPECTED ERROR:", { message: msg, stack });
+
+    return errorResponse(
+      "Error interno inesperado del servidor.",
+      500,
       {
-        error: "Error interno del servidor. Por favor, intenta de nuevo.",
-      },
-      { status: 500 }
+        message: msg,
+        stack: stack?.split("\n").slice(0, 5),
+      }
     );
   }
 }
