@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import ZAI from "z-ai-web-dev-sdk";
 
+function createZaiClient() {
+  const baseUrl = process.env.ZAI_BASE_URL;
+  const apiKey = process.env.ZAI_API_KEY;
+
+  if (!baseUrl || !apiKey) {
+    throw new Error("ZAI_BASE_URL and ZAI_API_KEY environment variables are required.");
+  }
+
+  // Bypass loadConfig() by constructing ZAI directly with env vars
+  return new ZAI({ baseUrl, apiKey });
+}
+
 const SUBDIMENSION_CRITERIA = [
   {
     id: "llm-isms",
@@ -124,7 +136,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const zai = await ZAI.create();
+    const zai = createZaiClient();
 
     const systemPrompt = `You are an expert auditor for Live S2S (Speech-to-Speech) AI voice model evaluation. You analyze evaluator justifications written in Spanish and produce a structured vote analysis.
 
