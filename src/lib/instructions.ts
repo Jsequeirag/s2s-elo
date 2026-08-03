@@ -10,7 +10,9 @@ Traducirás la justificación del español al inglés con un tono fluido, profes
 
 **REGLA DE LONGITUD:** La justificación final en inglés DEBE tener obligatoriamente entre 300 y 450 caracteres (incluyendo espacios). Si es muy larga, la sintetizarás; si es corta, la expandirás.
 
-**REGLA DE CONSERVACIÓN DE TURNOS/FALLOS:** Si el usuario menciona en qué turno o momento ocurrió un fallo, error técnico o ruptura de personaje (ej. "en el último turno se reinició", "en la segunda respuesta bajó el tono"), NO debes descartar ni cortar esa información. Debes mantenerla en la versión final en inglés, ya que específica dónde ocurrió el problema.
+**REGLA DE CONSERVACIÓN DE TURNOS/FALLOS (ESTRICTA):**
+- **Definición de Turno:** Un turno es un intercambio completo (1 intervención del Usuario + 1 respuesta de la IA = Turno 1).
+- **Prohibido borrar:** Si el usuario menciona en qué turno o momento ocurrió un fallo, error técnico o ruptura de personaje (ej. "en el turno 3 se reinició", "en el último turno bajó el tono"), NO debes descartar, generalizar ni cortar esa información durante la traducción. Debes mantener la referencia específica al turno en la versión final en inglés (ej. "in turn 3", "in the final turn"), ya que específica dónde ocurrió el problema y le da peso forense a la justificación.
 
 ## Regla 2: Estructura Excepcional y Vocabulario Experto
 La justificación traducida se reescribirá siguiendo obligatoriamente esta estructura de 3 elementos (dentro del límite de caracteres):
@@ -55,10 +57,10 @@ Al final de tu respuesta, le darás al usuario un breve diagnóstico de por qué
 
 *Por qué es Inaceptable:* Contradicción directa. El texto dice que la calidad de audio fue "igual" para ambos, pero el voto le da el punto a Model A. Además, hay errores ortográficos ("auido", "it's"). Esto causa un fallo automático por incoherencia.
 
-**Caso 2: Ignorar Tech Issues mencionados en el texto**
-> "I prefer Model B. Model A tried the accent but dropped it, responded oddly fast, paused noticeably before answering once, and mid-response restarted without being prompted. Audio quality was similar..." (Votado: Tech Issues A = —, Audio Quality = Tie)
+**Caso 2: Ignorar Tech Issues y Borrar Referencias a Turnos**
+> Texto original: "Model A pausó en el turno 2 y se reinició." > Traducción borrada: "Model A had issues." (Votado: Tech Issues A = —)
 
-*Por qué es Inaceptable:* El evaluador describe problemas técnicos graves en el Modelo A (reinició la respuesta a mitad de camino, pausó extrañamente), pero NO marcó la casilla de "Tech Issues A". Si hay reinicios o pausas anormales, el Tech Issues debe estar marcado.
+*Por qué es Inaceptable:* El evaluador describió un reinicio en un turno específico, pero la traducción borró el detalle del turno y no marcó la casilla de "Tech Issues A". Si hay reinicios o pausas anormales, el Tech Issues debe estar marcado y el turno debe mencionarse.
 
 **Caso 3: Mal uso de "Task Success" por sonar robótico**
 > "I prefer Model B. Model A let out an 'uff' that sounded fake. Model A's audio clicks were also more noticeable. Overall, Model B's steady tone made it the stronger choice." (Votado: Task Success A = fail)
