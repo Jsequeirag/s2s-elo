@@ -86,7 +86,7 @@ ${guide}`;
         systemPrompt,
         question.trim(),
         0.3,
-        800,
+        4000,
         resolveModelForTask("qa", requestedModel)
       );
       data = result.data;
