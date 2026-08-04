@@ -221,7 +221,7 @@ CRITICAL REMINDERS:
 
 """${justification}"""`,
         0.1,
-        2000,
+        8000,
         resolveModelForTask("analyze", requestedModel)
       );
       data = result.data;

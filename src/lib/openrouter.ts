@@ -107,6 +107,10 @@ export async function callOpenRouter(
       // Qwen 3.x Plus/Max). Otherwise the model spends all max_tokens on
       // internal reasoning and returns content: null.
       thinking: { type: "disabled" },
+      // Low reasoning effort for OpenAI reasoning models (o-series, Luna)
+      // so they reserve most tokens for the actual output instead of the
+      // internal chain-of-thought.
+      reasoning: { effort: "low" },
     }),
   });
 
