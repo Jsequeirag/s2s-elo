@@ -52,6 +52,10 @@ export async function callOpenRouter(
       ],
       temperature,
       max_tokens: maxTokens,
+      // Disable "thinking"/reasoning mode for models that support it (e.g.
+      // Qwen 3.x Plus/Max). Otherwise the model spends all max_tokens on
+      // internal reasoning and returns content: null.
+      thinking: { type: "disabled" },
     }),
   });
 
