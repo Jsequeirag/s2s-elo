@@ -2,14 +2,6 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-const COMMON_MODEL_PROFILES = [
-    { label: "OpenAI GPT-4o mini", value: "openai/gpt-4o-mini" },
-    { label: "OpenAI GPT-4o", value: "openai/gpt-4o" },
-    { label: "Google Gemini 2.5 Flash Lite", value: "google/gemini-2.5-flash-lite" },
-    { label: "OpenAI GPT-5.6 Luna", value: "openai/gpt-5.6-luna" },
-    { label: "OpenAI GPT-5.6 Terra", value: "openai/gpt-5.6-terra" },
-];
-
 export default function ModelConfigTab({
     qaModel,
     imageModel,
@@ -37,47 +29,32 @@ export default function ModelConfigTab({
                 <div className="grid gap-4 md:grid-cols-3">
                     <label className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
                         <span className="font-medium">Consulta / QA</span>
-                        <select
+                        <input
                             value={qaModel}
                             onChange={(e) => onQaModelChange(e.target.value)}
                             className="w-full rounded-md border bg-background px-2 py-2 text-sm"
-                        >
-                            {COMMON_MODEL_PROFILES.map((profile) => (
-                                <option key={profile.value} value={profile.value}>
-                                    {profile.label}
-                                </option>
-                            ))}
-                        </select>
+                            placeholder="openai/gpt-4o-mini"
+                        />
                     </label>
 
                     <label className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
                         <span className="font-medium">Imagen / Rationale</span>
-                        <select
+                        <input
                             value={imageModel}
                             onChange={(e) => onImageModelChange(e.target.value)}
                             className="w-full rounded-md border bg-background px-2 py-2 text-sm"
-                        >
-                            {COMMON_MODEL_PROFILES.map((profile) => (
-                                <option key={profile.value} value={profile.value}>
-                                    {profile.label}
-                                </option>
-                            ))}
-                        </select>
+                            placeholder="openai/gpt-4o-mini"
+                        />
                     </label>
 
                     <label className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
                         <span className="font-medium">Justificacion</span>
-                        <select
+                        <input
                             value={analyzeModel}
                             onChange={(e) => onAnalyzeModelChange(e.target.value)}
                             className="w-full rounded-md border bg-background px-2 py-2 text-sm"
-                        >
-                            {COMMON_MODEL_PROFILES.map((profile) => (
-                                <option key={profile.value} value={profile.value}>
-                                    {profile.label}
-                                </option>
-                            ))}
-                        </select>
+                            placeholder="openai/gpt-4o-mini"
+                        />
                     </label>
                 </div>
             </CardContent>
