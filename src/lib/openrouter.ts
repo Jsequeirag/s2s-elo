@@ -2,6 +2,22 @@ import { NextResponse } from "next/server";
 import { instructions as instructionsContent } from "@/lib/instructions";
 import { guide as guideContent } from "@/lib/guide";
 
+export type OpenRouterTask = "analyze" | "qa" | "image";
+
+type OpenRouterMessageContentItem =
+  | { type: "text"; text: string }
+  | {
+    type: "image_url";
+    image_url: {
+      url: string;
+    };
+  };
+
+type OpenRouterMessage = {
+  role: string;
+  content: string | OpenRouterMessageContentItem[];
+};
+
 /**
  * Shared reference material used by both /api/analyze and /api/qa.
  * Imported at build time (TS modules exporting template-literal strings),
@@ -15,9 +31,37 @@ export function loadReferenceFiles() {
 }
 
 /**
+ * Resolves the model for a specific task.
+ *
+ * Priority order:
+ * 1. explicit request override from the route payload
+ * 2. env-specific task model (OPENROUTER_MODEL_ANALYZE / QA / IMAGE)
+ * 3. general OPENROUTER_MODEL fallback
+ * 4. hardcoded default for this app
+ */
+export function resolveModelForTask(task: OpenRouterTask, requestModel?: string) {
+  const requested = requestModel?.trim();
+  if (requested) {
+    return requested;
+  }
+
+  const envVarMap: Record<OpenRouterTask, string> = {
+    analyze: "OPENROUTER_MODEL_ANALYZE",
+    qa: "OPENROUTER_MODEL_QA",
+    image: "OPENROUTER_MODEL_IMAGE",
+  };
+
+  const taskModel = process.env[envVarMap[task]]?.trim();
+  if (taskModel) {
+    return taskModel;
+  }
+
+  return process.env.OPENROUTER_MODEL?.trim() || "openai/gpt-4o-mini";
+}
+
+/**
  * Calls the OpenRouter Chat Completions API (OpenAI-compatible).
- * Requires OPENROUTER_API_KEY in the environment. The model defaults to
- * DeepSeek V4 Flash and can be overridden via OPENROUTER_MODEL.
+ * Requires OPENROUTER_API_KEY in the environment.
  *
  * Docs: https://openrouter.ai/docs
  */
@@ -25,10 +69,12 @@ export async function callOpenRouter(
   systemPrompt: string,
   userPrompt: string,
   temperature: number,
-  maxTokens = 2000
+  maxTokens = 2000,
+  modelOverride?: string,
+  messagesOverride?: OpenRouterMessage[]
 ) {
   const apiKey = process.env.OPENROUTER_API_KEY;
-  const model = process.env.OPENROUTER_MODEL || "qwen/qwen3.7-plus";
+  const model = modelOverride?.trim() || process.env.OPENROUTER_MODEL?.trim() || "openai/gpt-4o-mini";
 
   if (!apiKey) {
     throw new Error(
@@ -46,7 +92,7 @@ export async function callOpenRouter(
     },
     body: JSON.stringify({
       model,
-      messages: [
+      messages: messagesOverride ?? [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
