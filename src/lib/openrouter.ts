@@ -28,7 +28,7 @@ export async function callOpenRouter(
   maxTokens = 2000
 ) {
   const apiKey = process.env.OPENROUTER_API_KEY;
-  const model = process.env.OPENROUTER_MODEL || "deepseek/deepseek-v4-flash";
+  const model = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
 
   if (!apiKey) {
     throw new Error(
