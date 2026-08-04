@@ -28,7 +28,7 @@ export async function callOpenRouter(
   maxTokens = 2000
 ) {
   const apiKey = process.env.OPENROUTER_API_KEY;
-  const model = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
+  const model = process.env.OPENROUTER_MODEL || "qwen/qwen3.7-plus";
 
   if (!apiKey) {
     throw new Error(
