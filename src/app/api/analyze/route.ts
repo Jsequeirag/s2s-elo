@@ -3,6 +3,8 @@ import {
   callOpenRouter,
   errorResponse,
   extractContent,
+  extractUsage,
+  loadReferenceFiles,
   resolveModelForTask,
 } from "@/lib/openrouter";
 
@@ -151,7 +153,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Build prompt from reference files + output schema
-    const { instructions, guide } = loadReferenceFiles();
+    const { instructions, guide } = await loadReferenceFiles();
 
     const systemPrompt = `You are an expert auditor for Live S2S (Speech-to-Speech) AI voice model evaluation. You analyze evaluator justifications written in Spanish, translate and strengthen them into English, and produce a structured vote analysis that is a PERFECT mirror of what the justification says.
 

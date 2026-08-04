@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Build system prompt from reference files
-    const { instructions, guide } = loadReferenceFiles();
+    const { instructions, guide } = await loadReferenceFiles();
 
     const systemPrompt = `Eres un asistente experto en la evaluacion de modelos de voz AI Live S2S (Speech-to-Speech). Tu trabajo es responder preguntas de los evaluadores basandote EXCLUSIVAMENTE en el material de referencia siguiente.
 

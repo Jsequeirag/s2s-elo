@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -93,6 +93,43 @@ export default function EvaluatorTab({
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  // Track the justification text at the time of the last analysis for saving
+  const justificationAtAnalysis = useRef("");
+
+  // Load saved justification on mount
+  useEffect(() => {
+    if (loaded) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/justification");
+        const json = await res.json();
+        if (res.ok && json.data) {
+          setJustification(json.data.justification);
+          setResult(json.data.analysis as AnalysisResult);
+          justificationAtAnalysis.current = json.data.justification;
+        }
+      } catch {
+        // Silently fail — if there's no saved data, start fresh
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, [loaded]);
+
+  // Persist result + justification to MongoDB
+  const persist = useCallback(async (jText: string, analysis: AnalysisResult) => {
+    try {
+      await fetch("/api/justification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ justification: jText, analysis }),
+      });
+    } catch {
+      // Best-effort persistence
+    }
+  }, []);
 
   const handleAnalyze = useCallback(async () => {
     if (justification.trim().length < 20) {
@@ -124,19 +161,24 @@ export default function EvaluatorTab({
       }
 
       setResult(data);
+      justificationAtAnalysis.current = justification.trim();
+      // Persist after successful analysis
+      persist(justification.trim(), data);
     } catch {
       setError("Error de conexion. Verifica tu red e intenta de nuevo.");
     } finally {
       setLoading(false);
     }
-  }, [analyzeModel, justification]);
+  }, [analyzeModel, justification, persist]);
 
   const updateDimension = (key: string, value: string) => {
     if (!result) return;
-    setResult({
+    const updated = {
       ...result,
       dimensions: { ...result.dimensions, [key]: value },
-    });
+    };
+    setResult(updated);
+    persist(justificationAtAnalysis.current, updated);
   };
 
   const updateSubdimension = (
@@ -145,26 +187,41 @@ export default function EvaluatorTab({
     checked: boolean
   ) => {
     if (!result) return;
-    setResult({
+    const updated = {
       ...result,
       subdimensions: result.subdimensions.map((s) =>
         s.id === id ? { ...s, [model]: checked } : s
       ),
-    });
+    };
+    setResult(updated);
+    persist(justificationAtAnalysis.current, updated);
   };
 
   const updateTechIssues = (model: "A" | "B", checked: boolean) => {
     if (!result) return;
-    setResult({
+    const updated = {
       ...result,
       techIssues: { ...result.techIssues, [model]: checked },
-    });
+    };
+    setResult(updated);
+    persist(justificationAtAnalysis.current, updated);
   };
 
-  const handleReset = useCallback(() => {
+  const handleReset = useCallback(async () => {
     setJustification("");
     setResult(null);
     setError("");
+    justificationAtAnalysis.current = "";
+    // Clear persisted justification
+    try {
+      await fetch("/api/justification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clear: true }),
+      });
+    } catch {
+      // Best-effort
+    }
   }, []);
 
   return (
@@ -259,6 +316,7 @@ export default function EvaluatorTab({
                   <span><strong>Tokens:</strong> {result.usage.totalTokens}</span>
                   <span><strong>Prompt:</strong> {result.usage.promptTokens}</span>
                   <span><strong>Completion:</strong> {result.usage.completionTokens}</span>
+                  <span><strong>Costo:</strong> ${result.usage.cost.toFixed(4)}</span>
                   <span><strong>Hora:</strong> {new Date(result.requestedAt).toLocaleString()}</span>
                 </div>
               </CardContent>

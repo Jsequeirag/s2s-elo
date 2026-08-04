@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { instructions as instructionsContent } from "@/lib/instructions";
 import { guide as guideContent } from "@/lib/guide";
+import { getReferenceDoc } from "@/lib/mongodb";
 
 export type OpenRouterTask = "analyze" | "qa" | "image";
 
@@ -20,13 +21,17 @@ type OpenRouterMessage = {
 
 /**
  * Shared reference material used by both /api/analyze and /api/qa.
- * Imported at build time (TS modules exporting template-literal strings),
- * so they always ship inside the serverless bundle on Vercel.
+ * Checks MongoDB first for user-uploaded content; falls back to the
+ * bundled TS modules (template-literal strings shipped at build time).
  */
-export function loadReferenceFiles() {
+export async function loadReferenceFiles() {
+  const [dbInstructions, dbGuide] = await Promise.all([
+    getReferenceDoc("instructions"),
+    getReferenceDoc("guide"),
+  ]);
   return {
-    instructions: instructionsContent,
-    guide: guideContent,
+    instructions: dbInstructions ?? instructionsContent,
+    guide: dbGuide ?? guideContent,
   };
 }
 
@@ -145,16 +150,26 @@ export function extractUsage(data: unknown) {
       prompt_tokens?: number;
       completion_tokens?: number;
       total_tokens?: number;
+      cost?: number;
+      prompt_tokens_details?: {
+        cached_tokens?: number;
+        cache_write_tokens?: number;
+      };
+      completion_tokens_details?: {
+        reasoning_tokens?: number;
+      };
     };
   })?.usage;
 
   const promptTokens = usage?.prompt_tokens ?? 0;
   const completionTokens = usage?.completion_tokens ?? 0;
   const totalTokens = usage?.total_tokens ?? promptTokens + completionTokens;
+  const cost = usage?.cost ?? 0;
 
   return {
     promptTokens,
     completionTokens,
     totalTokens,
+    cost: Math.round(cost * 10_000) / 10_000, // 4 decimal places ($0.0001)
   };
 }

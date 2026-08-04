@@ -23,11 +23,12 @@ export default function ModelConfigTab({
                 <CardTitle className="text-lg">Modelos por tarea</CardTitle>
                 <CardDescription>
                     Elige un modelo independiente para consultas, imagen y generacion de justificacion.
+                    El costo real de cada llamada aparece en los resultados.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-3">
-                    <label className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
+                    <div className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
                         <span className="font-medium">Consulta / QA</span>
                         <input
                             value={qaModel}
@@ -35,9 +36,9 @@ export default function ModelConfigTab({
                             className="w-full rounded-md border bg-background px-2 py-2 text-sm"
                             placeholder="openai/gpt-4o-mini"
                         />
-                    </label>
+                    </div>
 
-                    <label className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
+                    <div className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
                         <span className="font-medium">Imagen / Rationale</span>
                         <input
                             value={imageModel}
@@ -45,9 +46,9 @@ export default function ModelConfigTab({
                             className="w-full rounded-md border bg-background px-2 py-2 text-sm"
                             placeholder="openai/gpt-4o-mini"
                         />
-                    </label>
+                    </div>
 
-                    <label className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
+                    <div className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
                         <span className="font-medium">Justificacion</span>
                         <input
                             value={analyzeModel}
@@ -55,7 +56,7 @@ export default function ModelConfigTab({
                             className="w-full rounded-md border bg-background px-2 py-2 text-sm"
                             placeholder="openai/gpt-4o-mini"
                         />
-                    </label>
+                    </div>
                 </div>
             </CardContent>
         </Card>

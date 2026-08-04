@@ -51,6 +51,7 @@ export default function ConsultTab({
       promptTokens: number;
       completionTokens: number;
       totalTokens: number;
+      cost: number;
     };
   } | null>(null);
 
@@ -89,7 +90,7 @@ export default function ConsultTab({
         setLastCallMeta({
           model: data.model || qaModel,
           requestedAt: data.requestedAt || new Date().toISOString(),
-          usage: data.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          usage: data.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0 },
         });
       } catch {
         setError("Error de conexion. Verifica tu red e intenta de nuevo.");
@@ -246,6 +247,7 @@ export default function ConsultTab({
                   <span><strong>Tokens:</strong> {lastCallMeta.usage.totalTokens}</span>
                   <span><strong>Prompt:</strong> {lastCallMeta.usage.promptTokens}</span>
                   <span><strong>Completion:</strong> {lastCallMeta.usage.completionTokens}</span>
+                  <span><strong>Costo:</strong> ${lastCallMeta.usage.cost.toFixed(4)}</span>
                   <span><strong>Hora:</strong> {new Date(lastCallMeta.requestedAt).toLocaleString()}</span>
                 </div>
               </div>

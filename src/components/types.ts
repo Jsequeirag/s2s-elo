@@ -32,6 +32,7 @@ export interface AnalysisResult {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
+    cost: number;
   };
   model?: string;
   requestedAt?: string;

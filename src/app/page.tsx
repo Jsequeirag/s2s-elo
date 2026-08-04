@@ -6,12 +6,16 @@ import {
   PenLine,
   MessageCircleQuestion,
   Settings2,
+  ImageIcon,
+  FileText,
 } from "lucide-react";
 import EvaluatorTab from "@/components/evaluator-tab";
 import ConsultTab from "@/components/consult-tab";
+import ImageTab from "@/components/image-tab";
 import ModelConfigTab from "@/components/model-config-tab";
+import DocumentsTab from "@/components/documents-tab";
 
-type TabId = "transcribir" | "consultar" | "modelos";
+type TabId = "transcribir" | "consultar" | "imagen" | "modelos" | "documentos";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>("transcribir");
@@ -22,7 +26,9 @@ export default function Home() {
   const tabs: { id: TabId; label: string; icon: typeof PenLine }[] = [
     { id: "transcribir", label: "Transcribir", icon: PenLine },
     { id: "consultar", label: "Consultar", icon: MessageCircleQuestion },
+    { id: "imagen", label: "Imagen", icon: ImageIcon },
     { id: "modelos", label: "Modelos", icon: Settings2 },
+    { id: "documentos", label: "Documentos", icon: FileText },
   ];
 
   return (
@@ -67,7 +73,7 @@ export default function Home() {
           })}
         </div>
 
-        {/* Tab content — both always mounted, hidden via CSS to preserve state */}
+        {/* Tab content — all always mounted, hidden via CSS to preserve state */}
         <div className={activeTab === "transcribir" ? "" : "hidden"}>
           <EvaluatorTab analyzeModel={analyzeModel} onAnalyzeModelChange={setAnalyzeModel} />
         </div>
@@ -75,6 +81,12 @@ export default function Home() {
           <ConsultTab
             qaModel={qaModel}
             onQaModelChange={setQaModel}
+          />
+        </div>
+        <div className={activeTab === "imagen" ? "" : "hidden"}>
+          <ImageTab
+            imageModel={imageModel}
+            onImageModelChange={setImageModel}
           />
         </div>
         <div className={activeTab === "modelos" ? "" : "hidden"}>
@@ -86,6 +98,9 @@ export default function Home() {
             onImageModelChange={setImageModel}
             onAnalyzeModelChange={setAnalyzeModel}
           />
+        </div>
+        <div className={activeTab === "documentos" ? "" : "hidden"}>
+          <DocumentsTab />
         </div>
       </main>
     </div>
