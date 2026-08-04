@@ -59,16 +59,19 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Load saved justification — it is the SOURCE OF TRUTH.
-        // If missing, we cannot do the comparison.
+        // Load saved justification — the AI-generated strengthenedJustification
+        // (English) is the SOURCE OF TRUTH. The user's raw Spanish input is not.
         const saved = await getLatestJustification();
-        const savedJustification = saved?.justification?.trim() || "";
+        const savedJustification = (
+            (saved?.analysis as { strengthenedJustification?: string } | undefined)
+                ?.strengthenedJustification || ""
+        ).trim();
 
         if (!savedJustification) {
             return errorResponse(
-                "No hay una justificacion guardada. Primero genera una justificacion en el tab Transcribir antes de analizar la imagen.",
+                "No hay una justificacion generada por la IA. Primero analiza una justificacion en el tab Transcribir para que la IA genere el texto en ingles (fuente de verdad).",
                 400,
-                "La justificacion generada es la fuente de verdad para comparar el Rationale de la imagen."
+                "La justificacion generada por la IA (strengthenedJustification, en ingles) es la fuente de verdad para comparar el Rationale de la imagen."
             );
         }
 
