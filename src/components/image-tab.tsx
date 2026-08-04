@@ -127,7 +127,15 @@ export default function ImageTab({
         const res = await fetch("/api/justification");
         const json = await res.json();
         if (res.ok && json.data?.imageAnalysis) {
-          setResult(json.data.imageAnalysis as ImageResult);
+          const saved = json.data.imageAnalysis;
+          // Only load if it matches the current schema (has deviations + finalText).
+          // Old saved analyses (answer/errors/comparison) are incompatible and ignored.
+          if (
+            typeof saved.finalText === "string" &&
+            Array.isArray(saved.deviations)
+          ) {
+            setResult(saved as ImageResult);
+          }
         }
       } catch {
         // Silently fail — if there's no saved data, start fresh
@@ -372,50 +380,54 @@ export default function ImageTab({
 
       {/* Results */}
       {result && !loading && (
+        (() => {
+          const deviations = result.deviations || [];
+          const isIdentical = result.isIdentical ?? deviations.length === 0;
+          return (
         <div className="space-y-4">
           {/* Main summary card */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  {result.isIdentical ? (
+                  {isIdentical ? (
                     <CheckCircle2 className="size-5 text-emerald-500" />
                   ) : (
                     <AlertCircle className="size-5 text-amber-500" />
                   )}
-                  {result.isIdentical
+                  {isIdentical
                     ? "Rationale coincide con la justificacion"
                     : "Se encontraron desviaciones"}
                 </CardTitle>
                 <Badge
                   variant={
-                    result.isIdentical
+                    isIdentical
                       ? "default"
-                      : result.deviations.length > 3
+                      : deviations.length > 3
                         ? "destructive"
                         : "secondary"
                   }
                 >
-                  {result.deviations.length} desviacion
-                  {result.deviations.length !== 1 ? "es" : ""}
+                  {deviations.length} desviacion
+                  {deviations.length !== 1 ? "es" : ""}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Summary text */}
               <p className="text-sm leading-relaxed text-foreground">
-                {result.isIdentical
+                {isIdentical
                   ? "El texto del Rationale extraido de la imagen es identico a la justificacion guardada. No se detectaron problemas."
-                  : `El Rationale de la imagen tiene ${result.deviations.length} desviacion${result.deviations.length !== 1 ? "es" : ""} respecto a la justificacion (fuente de verdad). Revisa los detalles abajo.`}
+                  : `El Rationale de la imagen tiene ${deviations.length} desviacion${deviations.length !== 1 ? "es" : ""} respecto a la justificacion (fuente de verdad). Revisa los detalles abajo.`}
               </p>
 
               {/* Deviations (always visible) */}
-              {result.deviations.length > 0 && (
+              {deviations.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Desviaciones detectadas
                   </p>
-                  {result.deviations.map((dev, i) => {
+                  {deviations.map((dev, i) => {
                     const meta = DEVIATION_META[dev.type];
                     const Icon = meta?.icon || AlertCircle;
                     return (
@@ -560,6 +572,8 @@ export default function ImageTab({
             </Button>
           </div>
         </div>
+          );
+        })()
       )}
     </div>
   );
