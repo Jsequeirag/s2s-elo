@@ -6,6 +6,7 @@ import {
   extractUsage,
   resolveModelForTask,
 } from "@/lib/openrouter";
+import { saveTaskSpec } from "@/lib/mongodb";
 
 interface DialogRequest {
   imageDataUrl: string;
@@ -19,6 +20,7 @@ interface DialogTurn {
 
 interface DialogResponse {
   scenarioType: string;
+  scenario?: string;
   scenarioDescription?: string;
   userRole?: string;
   skillsTested?: string[];
@@ -46,6 +48,7 @@ La captura suele contener:
 ## Paso 1 — Extraccion
 Lee la imagen y extrae:
 - El texto de "WHAT TO DO" (obligatorio)
+- El valor del campo "SCENARIO" si aparece (ej. SEARCH-REQUIRED, CONFLICTING-CUES, OBJECTIVE, etc.) — extraelo tal cual aparece, sin traducir ni normalizar
 - El "User Role" si aparece (quien llama / quien atiende)
 - Las "SKILLS TESTED" si aparecen
 - Cualquier restriccion visible (duracion maxima, turnos limites)
@@ -82,6 +85,7 @@ Reglas de generacion:
 Responde EXCLUSIVAMENTE con JSON valido, en espanol, sin texto adicional:
 {
   "scenarioType": "tipo_clasificado",
+  "scenario": "VALOR DEL CAMPO SCENARIO extraido tal cual de la imagen, o vacio si no aparece",
   "scenarioDescription": "descripcion breve del WHAT TO DO extraido",
   "userRole": "rol del usuario si aparece, o vacio",
   "skillsTested": ["habilidad 1", "habilidad 2"],
@@ -158,6 +162,7 @@ export async function POST(req: NextRequest) {
       // Try to parse as JSON
       let parsed: {
         scenarioType?: string;
+        scenario?: string;
         scenarioDescription?: string;
         userRole?: string;
         skillsTested?: string[];
@@ -182,6 +187,7 @@ export async function POST(req: NextRequest) {
 
       const response: DialogResponse = {
         scenarioType: parsed.scenarioType || "desconocido",
+        scenario: parsed.scenario,
         scenarioDescription: parsed.scenarioDescription,
         userRole: parsed.userRole,
         skillsTested: parsed.skillsTested,
@@ -191,6 +197,22 @@ export async function POST(req: NextRequest) {
           result.model || resolveModelForTask("dialog", requestedModel),
         requestedAt: new Date().toISOString(),
       };
+
+      // Persist task spec (SCENARIO + WHAT TO DO + Skills Tested) so the
+      // analyze endpoint can use it as evaluation criteria for task success.
+      // Best-effort — a failure here should not break the response.
+      try {
+        await saveTaskSpec({
+          scenario: parsed.scenario,
+          whatToDo: parsed.scenarioDescription,
+          skillsTested: parsed.skillsTested,
+          userRole: parsed.userRole,
+        });
+      } catch (saveError) {
+        const msg =
+          saveError instanceof Error ? saveError.message : String(saveError);
+        console.error("[API /api/dialog] saveTaskSpec error:", msg);
+      }
 
       return Response.json(response);
     } catch (apiError) {

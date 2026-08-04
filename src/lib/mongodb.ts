@@ -23,11 +23,20 @@ function getClient(): Promise<MongoClient> {
   return clientPromise;
 }
 
+export interface TaskSpec {
+  scenario?: string;
+  whatToDo?: string;
+  skillsTested?: string[];
+  userRole?: string;
+  updatedAt: string;
+}
+
 export interface JustificationDocument extends Document {
   justification: string;
   analysis: Record<string, unknown>;
   imageAnalysis?: Record<string, unknown>;
   dialogue?: Record<string, unknown>;
+  taskSpec?: TaskSpec;
   updatedAt: string;
 }
 
@@ -44,7 +53,8 @@ export async function getLatestJustification(): Promise<JustificationDocument | 
 }
 
 /**
- * Saves (upserts) a justification document. Replaces any previous data.
+ * Saves (upserts) a justification document. Preserves taskSpec,
+ * imageAnalysis, and dialogue fields if they already exist.
  */
 export async function saveJustification(data: {
   justification: string;
@@ -53,13 +63,26 @@ export async function saveJustification(data: {
   const client = await getClient();
   const db = client.db(DB_NAME);
 
-  await db.collection(COLLECTION).deleteMany({});
+  const result = await db
+    .collection<JustificationDocument>(COLLECTION)
+    .updateOne(
+      {},
+      {
+        $set: {
+          justification: data.justification,
+          analysis: data.analysis,
+          updatedAt: new Date().toISOString(),
+        },
+      }
+    );
 
-  await db.collection<JustificationDocument>(COLLECTION).insertOne({
-    justification: data.justification,
-    analysis: data.analysis,
-    updatedAt: new Date().toISOString(),
-  });
+  if (result.matchedCount === 0) {
+    await db.collection<JustificationDocument>(COLLECTION).insertOne({
+      justification: data.justification,
+      analysis: data.analysis,
+      updatedAt: new Date().toISOString(),
+    });
+  }
 }
 
 /**
@@ -147,6 +170,36 @@ export async function clearDialogue(): Promise<void> {
 
   if (result.matchedCount === 0) {
     // No-op
+  }
+}
+
+/**
+ * Saves the task specification (SCENARIO + WHAT TO DO + Skills Tested)
+ * extracted from the dialogue generation image. Replaces any previous
+ * taskSpec — only one active task spec exists at a time.
+ */
+export async function saveTaskSpec(
+  spec: Omit<TaskSpec, "updatedAt">
+): Promise<void> {
+  const client = await getClient();
+  const db = client.db(DB_NAME);
+
+  const taskSpec: TaskSpec = {
+    ...spec,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const result = await db
+    .collection<JustificationDocument>(COLLECTION)
+    .updateOne({}, { $set: { taskSpec, updatedAt: new Date().toISOString() } });
+
+  if (result.matchedCount === 0) {
+    await db.collection<JustificationDocument>(COLLECTION).insertOne({
+      justification: "",
+      analysis: {},
+      taskSpec,
+      updatedAt: new Date().toISOString(),
+    });
   }
 }
 

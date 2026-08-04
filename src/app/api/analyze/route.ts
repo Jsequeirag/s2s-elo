@@ -7,6 +7,7 @@ import {
   loadReferenceFiles,
   resolveModelForTask,
 } from "@/lib/openrouter";
+import { getLatestJustification } from "@/lib/mongodb";
 
 const SUBDIMENSION_CRITERIA = [
   {
@@ -155,6 +156,37 @@ export async function POST(req: NextRequest) {
     // 3. Build prompt from reference files + output schema
     const { instructions, guide } = await loadReferenceFiles();
 
+    // Load saved task spec (from dialog generation) to use as evaluation
+    // criteria for task success determination.
+    const savedDoc = await getLatestJustification();
+    const taskSpec = savedDoc?.taskSpec;
+    const hasTaskSpec =
+      taskSpec &&
+      (taskSpec.scenario || taskSpec.whatToDo || (taskSpec.skillsTested && taskSpec.skillsTested.length > 0));
+
+    const taskSpecSection = hasTaskSpec
+      ? `
+
+====================
+TASK SPECIFICATION (criterios de la tarea a evaluar)
+====================
+Estos son los criterios extraidos del escenario S2S Arena. Usalos para
+determinar si el modelo completo la tarea correctamente (taskSuccess).
+
+${taskSpec!.scenario ? `SCENARIO: ${taskSpec!.scenario}` : ""}
+${taskSpec!.whatToDo ? `WHAT TO DO: ${taskSpec!.whatToDo}` : ""}
+${taskSpec!.skillsTested && taskSpec!.skillsTested.length > 0 ? `SKILLS TESTED: ${taskSpec!.skillsTested!.join(", ")}` : ""}
+${taskSpec!.userRole ? `USER ROLE: ${taskSpec!.userRole}` : ""}
+
+IMPORTANTE para taskSuccess:
+- Evalua si el modelo logro lo que pide el "WHAT TO DO".
+- Considera las "SKILLS TESTED" como indicador de lo que debia demostrarse.
+- Marca taskSuccess = "fail" solo si el modelo no completo la tarea central.
+- Marca taskSuccess = "partial" si completo la tarea pero con deficiencias.
+- Marca taskSuccess = "pass" si completo la tarea satisfactoriamente.
+`
+      : "";
+
     const systemPrompt = `You are an expert auditor for Live S2S (Speech-to-Speech) AI voice model evaluation. You analyze evaluator justifications written in Spanish, translate and strengthen them into English, and produce a structured vote analysis that is a PERFECT mirror of what the justification says.
 
 You MUST follow the rules and reference material below. They define how to translate, strengthen, and vote.
@@ -168,7 +200,7 @@ ${instructions}
 EVALUATION GUIDE (jerarquia, trade-offs, taxonomia, errores)
 ====================
 ${guide}
-
+${taskSpecSection}
 ====================
 OUTPUT CONTRACT
 ====================
@@ -207,7 +239,7 @@ The JSON MUST match this exact schema:
 
 CRITICAL REMINDERS:
 - Apply the "mirror rule": every checkbox / vote MUST be an exact mirror of what the justification says. No contradictions.
-- Never mark Task Success = "fail" just because the model sounded fake — that is a Naturalness penalty.
+- Never mark Task Success = "fail" just because the model sounded fake — that is a Naturalness penalty.${hasTaskSpec ? '\n- Use the TASK SPECIFICATION above as the authoritative criteria for taskSuccess determination.' : ""}
 - If the text mentions clicks, restarts, pauses, or cuts → mark techIssues. If audio quality is equal → audioQuality = "Tie".
 - Strengthened justification MUST be 300-450 chars (English).`;
 

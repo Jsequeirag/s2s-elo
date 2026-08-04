@@ -30,6 +30,7 @@ interface DialogTurn {
 
 interface DialogResult {
   scenarioType: string;
+  scenario?: string;
   scenarioDescription?: string;
   userRole?: string;
   skillsTested?: string[];
@@ -343,10 +344,22 @@ export default function DialogTab({
                   <Badge variant={scenarioInfo.variant}>
                     {scenarioInfo.label}
                   </Badge>
+                  {result.scenario && (
+                    <Badge variant="outline" className="font-mono text-[11px]">
+                      {result.scenario}
+                    </Badge>
+                  )}
                   <span className="text-xs text-muted-foreground">
                     {result.turns.length} turnos
                   </span>
                 </div>
+              )}
+
+              {result.scenario && (
+                <p className="text-[11px] text-muted-foreground/70 italic">
+                  El SCENARIO es solo informativo (extraido de la imagen). No
+                  afecta la generacion del dialogo.
+                </p>
               )}
 
               {result.scenarioDescription && (
