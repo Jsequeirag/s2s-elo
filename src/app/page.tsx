@@ -142,6 +142,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const handleAnalyze = useCallback(async () => {
     if (justification.trim().length < 20) {
@@ -348,8 +349,38 @@ export default function Home() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="p-4 rounded-lg bg-muted/50 border text-sm leading-relaxed italic">
-                  &ldquo;{result.strengthenedJustification}&rdquo;
+                {/* Readable + copyable justification block */}
+                <div className="rounded-lg border bg-background overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2 bg-muted/60 border-b">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Texto para transcribir
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(result.strengthenedJustification);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                    >
+                      {copied ? (
+                        <>
+                          <CheckCircle2 className="size-3.5 text-emerald-500" />
+                          Copiado
+                        </>
+                      ) : (
+                        <>
+                          <ClipboardList className="size-3.5" />
+                          Copiar
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="px-5 py-5 text-lg md:text-xl leading-relaxed md:leading-loose font-serif">
+                    {result.strengthenedJustification}
+                  </p>
                 </div>
                 <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-sm text-emerald-800 dark:text-emerald-200">
                   <p className="font-medium mb-1">Diagnostico de Auditoria:</p>
