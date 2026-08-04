@@ -87,15 +87,32 @@ const DEVIATION_META: Record<
 };
 
 /**
- * Renders a string with **bold** markdown segments as <strong> elements.
+ * Renders a string with **bold** or *italic* markdown segments as <strong> elements.
+ * Handles both **double asterisk** and *single asterisk* markers since the model
+ * is inconsistent about which it returns.
  */
 function renderMarkdownBold(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  // Match **bold** or *bold* (non-greedy, no nesting)
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
   return parts.map((part, i) => {
-    if (part.startsWith("**") && part.endsWith("**")) {
+    // **double asterisk**
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
       return (
         <strong key={i} className="font-semibold text-emerald-700 dark:text-emerald-300">
           {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    // *single asterisk*
+    if (
+      part.startsWith("*") &&
+      part.endsWith("*") &&
+      part.length > 2 &&
+      !part.startsWith("**")
+    ) {
+      return (
+        <strong key={i} className="font-semibold text-emerald-700 dark:text-emerald-300">
+          {part.slice(1, -1)}
         </strong>
       );
     }
@@ -492,7 +509,7 @@ export default function ImageTab({
                       className="h-7 gap-1.5 text-xs"
                       onClick={() =>
                         navigator.clipboard?.writeText(
-                          result.finalText.replace(/\*\*/g, "") || ""
+                          result.finalText.replace(/\*\*/g, "").replace(/\*/g, "") || ""
                         )
                       }
                     >

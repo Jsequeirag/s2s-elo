@@ -171,11 +171,42 @@ Formato de salida:
                 };
             }
 
+            const deviations = parsed.deviations || [];
+            const isIdentical = parsed.isIdentical ?? deviations.length === 0;
+
+            // Determine finalText:
+            // 1. If the model returned finalText with markers (* or **), use it.
+            // 2. Otherwise, apply markers programmatically from deviations.
+            // 3. If no deviations, use the clean justification.
+            let finalText = savedJustification;
+
+            const modelFinalText = typeof parsed.finalText === "string" ? parsed.finalText.trim() : "";
+            const hasMarkers = /\*[^*]+\*/.test(modelFinalText);
+
+            if (hasMarkers) {
+              finalText = modelFinalText;
+            } else if (deviations.length > 0) {
+              // Programmatically wrap each justification fragment in **bold**
+              let marked = savedJustification;
+              for (const dev of deviations) {
+                const frag = dev.justification?.trim();
+                if (frag && frag.length > 2) {
+                  // Escape regex special chars in the fragment
+                  const escaped = frag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                  marked = marked.replace(
+                    new RegExp(escaped, "gi"),
+                    `**${frag}**`
+                  );
+                }
+              }
+              finalText = marked;
+            }
+
             const response: ImageResponse = {
                 detectedText: parsed.detectedText || content.trim(),
-                finalText: savedJustification,
-                isIdentical: parsed.isIdentical ?? false,
-                deviations: parsed.deviations || [],
+                finalText,
+                isIdentical,
+                deviations,
                 usage: extractUsage(result.data),
                 model: result.model || resolveModelForTask("image", requestedModel),
                 requestedAt: new Date().toISOString(),
