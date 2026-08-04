@@ -325,134 +325,16 @@ export default function ImageTab({
 
       {/* Results */}
       {result && !loading && (
-        <div className="space-y-6">
-          {/* Usage / Cost card */}
-          {result.model && result.requestedAt && result.usage && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Consumo de llamada</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                  <span><strong>Modelo:</strong> {result.model}</span>
-                  <span><strong>Tokens:</strong> {result.usage.totalTokens}</span>
-                  <span><strong>Prompt:</strong> {result.usage.promptTokens}</span>
-                  <span><strong>Completion:</strong> {result.usage.completionTokens}</span>
-                  <span><strong>Costo:</strong> ${result.usage.cost.toFixed(4)}</span>
-                  <span><strong>Hora:</strong> {new Date(result.requestedAt).toLocaleString()}</span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Detected text */}
-          {result.detectedText && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Texto Detectado</CardTitle>
-                <CardDescription>
-                  Texto extraido directamente de la imagen.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-lg border bg-muted/30 p-4 text-sm leading-relaxed whitespace-pre-wrap">
-                  {result.detectedText}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Corrected text */}
-          {result.correctedText && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <CheckCircle2 className="size-5 text-emerald-500" />
-                    Texto Corregido
-                  </CardTitle>
-                </div>
-                <CardDescription>
-                  Texto con correcciones ortograficas aplicadas.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-lg border bg-background overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-2 bg-muted/60 border-b">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Texto corregido
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 gap-1.5 text-xs"
-                      onClick={() =>
-                        navigator.clipboard?.writeText(result.correctedText || "")
-                      }
-                    >
-                      Copiar
-                    </Button>
-                  </div>
-                  <div className="px-5 py-5 text-base leading-relaxed whitespace-pre-wrap">
-                    {result.correctedText}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Spelling errors list */}
-          {result.errors && result.errors.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">
-                  Errores Ortograficos ({result.errors.length})
+        <div className="space-y-4">
+          {/* Main summary card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <CheckCircle2 className="size-5 text-emerald-500" />
+                  Analisis Completado
                 </CardTitle>
-                <CardDescription>
-                  Errores detectados y corregidos en orden de aparicion.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-lg border overflow-hidden">
-                  <div className="grid grid-cols-[auto_1fr_1fr_60px] gap-2 px-4 py-2.5 bg-muted/80 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    <span>#</span>
-                    <span>Original</span>
-                    <span>Correccion</span>
-                    <span>Razon</span>
-                  </div>
-                  {result.errors.map((err, i) => (
-                    <div
-                      key={i}
-                      className="grid grid-cols-[auto_1fr_1fr_60px] gap-2 px-4 py-3 border-t items-center text-sm"
-                    >
-                      <Badge variant="outline" className="w-6 justify-center">
-                        {err.position}
-                      </Badge>
-                      <span className="text-destructive line-through">
-                        {err.original}
-                      </span>
-                      <span className="text-emerald-600 dark:text-emerald-400">
-                        {err.corrected}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {err.reason}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Comparison with saved justification */}
-          {result.comparison && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <GitCompareArrows className="size-5 text-blue-500" />
-                    Comparacion con Justificacion
-                  </CardTitle>
+                {result.comparison && (
                   <Badge
                     variant={
                       result.comparison.coherence === "alta"
@@ -464,80 +346,217 @@ export default function ImageTab({
                   >
                     Coherencia {result.comparison.coherence}
                   </Badge>
-                </div>
-                <CardDescription>
-                  Comparacion del texto del Rationale (manual) contra la justificacion guardada.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {result.comparison.summary && (
-                  <div className="rounded-lg border bg-muted/30 p-4 text-sm leading-relaxed whitespace-pre-wrap">
-                    {result.comparison.summary}
-                  </div>
                 )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Comparison summary (natural text) */}
+              {result.comparison?.summary ? (
+                <p className="text-sm leading-relaxed text-foreground">
+                  {result.comparison.summary}
+                </p>
+              ) : result.correctedText ? (
+                <p className="text-sm leading-relaxed text-foreground">
+                  Se detectaron {result.errors?.length || 0} error
+                  {(result.errors?.length || 0) !== 1 ? "es" : ""} ortografico
+                  {(result.errors?.length || 0) !== 1 ? "s" : ""} en el texto del
+                  Rationale.
+                </p>
+              ) : (
+                <p className="text-sm leading-relaxed text-foreground">
+                  {result.answer}
+                </p>
+              )}
 
-                {result.comparison.differences && result.comparison.differences.length > 0 && (
-                  <div className="rounded-lg border overflow-hidden">
-                    <div className="grid grid-cols-[1fr_1fr_auto] gap-2 px-4 py-2.5 bg-muted/80 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      <span>Rationale (imagen)</span>
-                      <span>Justificacion (guardada)</span>
-                      <span>Impacto</span>
-                    </div>
+              {/* Key differences (always visible, not collapsed) */}
+              {result.comparison?.differences &&
+                result.comparison.differences.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Diferencias con la justificacion guardada
+                    </p>
                     {result.comparison.differences.map((diff, i) => (
                       <div
                         key={i}
-                        className="grid grid-cols-[1fr_1fr_auto] gap-2 px-4 py-3 border-t items-start text-sm"
+                        className="rounded-lg border p-3 space-y-1.5"
                       >
-                        <span className="text-amber-700 dark:text-amber-400">
-                          {diff.rationale}
-                        </span>
-                        <span className="text-blue-700 dark:text-blue-400">
-                          {diff.justification}
-                        </span>
-                        <Badge
-                          variant={
-                            diff.impact === "alto"
-                              ? "destructive"
-                              : diff.impact === "medio"
-                                ? "secondary"
-                                : "outline"
-                          }
-                          className="text-xs shrink-0"
-                        >
-                          {diff.impact}
-                        </Badge>
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            Impacto{" "}
+                            <Badge
+                              variant={
+                                diff.impact === "alto"
+                                  ? "destructive"
+                                  : diff.impact === "medio"
+                                    ? "secondary"
+                                    : "outline"
+                              }
+                              className="ml-1 text-[10px]"
+                            >
+                              {diff.impact}
+                            </Badge>
+                          </span>
+                        </div>
+                        <div className="grid gap-1.5 sm:grid-cols-2 text-sm">
+                          <div>
+                            <span className="text-[10px] uppercase text-amber-600 dark:text-amber-400 font-semibold">
+                              Rationale
+                            </span>
+                            <p className="text-amber-700 dark:text-amber-400">
+                              {diff.rationale}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase text-blue-600 dark:text-blue-400 font-semibold">
+                              Justificacion
+                            </span>
+                            <p className="text-blue-700 dark:text-blue-400">
+                              {diff.justification}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {(!result.comparison.differences || result.comparison.differences.length === 0) && (
-                  <p className="text-sm text-muted-foreground italic">
-                    No se encontraron diferencias significativas.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
+              {/* Collapsible: corrected text */}
+              {result.correctedText && (
+                <details className="group rounded-lg border">
+                  <summary className="flex items-center justify-between cursor-pointer px-4 py-2.5 text-sm font-medium hover:bg-muted/40 transition-colors select-none">
+                    <span className="flex items-center gap-2">
+                      <CheckCircle2 className="size-4 text-emerald-500" />
+                      Texto corregido
+                      {result.errors && result.errors.length > 0 && (
+                        <Badge variant="outline" className="text-[10px]">
+                          {result.errors.length} correcciones
+                        </Badge>
+                      )}
+                    </span>
+                    <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">
+                      ▼
+                    </span>
+                  </summary>
+                  <div className="px-4 pb-4 pt-1">
+                    <div className="rounded-md bg-muted/30 p-3 text-sm leading-relaxed whitespace-pre-wrap">
+                      {result.correctedText}
+                    </div>
+                    <div className="mt-2 flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1.5 text-xs"
+                        onClick={() =>
+                          navigator.clipboard?.writeText(
+                            result.correctedText || ""
+                          )
+                        }
+                      >
+                        Copiar
+                      </Button>
+                    </div>
+                  </div>
+                </details>
+              )}
 
-          {/* Fallback if only answer */}
-          {!result.correctedText && result.answer && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <CheckCircle2 className="size-5 text-emerald-500" />
-                  Respuesta
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-lg border bg-background overflow-hidden">
-                  <p className="px-5 py-5 text-base leading-relaxed whitespace-pre-wrap">
-                    {result.answer}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+              {/* Collapsible: spelling errors table */}
+              {result.errors && result.errors.length > 0 && (
+                <details className="group rounded-lg border">
+                  <summary className="flex items-center justify-between cursor-pointer px-4 py-2.5 text-sm font-medium hover:bg-muted/40 transition-colors select-none">
+                    <span className="flex items-center gap-2">
+                      <AlertCircle className="size-4 text-amber-500" />
+                      Detalle de errores ortograficos
+                    </span>
+                    <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">
+                      ▼
+                    </span>
+                  </summary>
+                  <div className="px-4 pb-4 pt-1">
+                    <div className="space-y-1.5">
+                      {result.errors.map((err, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 text-sm py-1"
+                        >
+                          <Badge
+                            variant="outline"
+                            className="w-5 h-5 justify-center text-[10px] p-0"
+                          >
+                            {err.position}
+                          </Badge>
+                          <span className="text-destructive line-through">
+                            {err.original}
+                          </span>
+                          <span className="text-muted-foreground text-xs">
+                            →
+                          </span>
+                          <span className="text-emerald-600 dark:text-emerald-400">
+                            {err.corrected}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </details>
+              )}
+
+              {/* Collapsible: original detected text */}
+              {result.detectedText && (
+                <details className="group rounded-lg border">
+                  <summary className="flex items-center justify-between cursor-pointer px-4 py-2.5 text-sm font-medium hover:bg-muted/40 transition-colors select-none">
+                    <span className="flex items-center gap-2">
+                      <ImageIcon className="size-4 text-muted-foreground" />
+                      Texto original detectado
+                    </span>
+                    <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">
+                      ▼
+                    </span>
+                  </summary>
+                  <div className="px-4 pb-4 pt-1">
+                    <div className="rounded-md bg-muted/30 p-3 text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
+                      {result.detectedText}
+                    </div>
+                  </div>
+                </details>
+              )}
+
+              {/* Collapsible: usage */}
+              {result.model && result.requestedAt && result.usage && (
+                <details className="group rounded-lg border">
+                  <summary className="flex items-center justify-between cursor-pointer px-4 py-2.5 text-sm font-medium hover:bg-muted/40 transition-colors select-none">
+                    <span>Consumo de llamada</span>
+                    <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">
+                      ▼
+                    </span>
+                  </summary>
+                  <div className="px-4 pb-4 pt-1">
+                    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                      <span>
+                        <strong>Modelo:</strong> {result.model}
+                      </span>
+                      <span>
+                        <strong>Tokens:</strong> {result.usage.totalTokens}
+                      </span>
+                      <span>
+                        <strong>Prompt:</strong> {result.usage.promptTokens}
+                      </span>
+                      <span>
+                        <strong>Completion:</strong>{" "}
+                        {result.usage.completionTokens}
+                      </span>
+                      <span>
+                        <strong>Costo:</strong> ${result.usage.cost.toFixed(4)}
+                      </span>
+                      <span>
+                        <strong>Hora:</strong>{" "}
+                        {new Date(result.requestedAt).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </details>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Reset Button */}
           <div className="flex justify-center">
