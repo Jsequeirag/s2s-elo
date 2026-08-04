@@ -138,3 +138,23 @@ export function extractContent(data: unknown): string {
   const choices = (data as { choices?: Array<{ message?: { content?: string } }> })?.choices;
   return choices?.[0]?.message?.content || "";
 }
+
+export function extractUsage(data: unknown) {
+  const usage = (data as {
+    usage?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      total_tokens?: number;
+    };
+  })?.usage;
+
+  const promptTokens = usage?.prompt_tokens ?? 0;
+  const completionTokens = usage?.completion_tokens ?? 0;
+  const totalTokens = usage?.total_tokens ?? promptTokens + completionTokens;
+
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens,
+  };
+}

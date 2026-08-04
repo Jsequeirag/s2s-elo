@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,74 +28,31 @@ const EXAMPLE_QUESTIONS = [
   "Como manejo los clics menores en la justificacion?",
 ];
 
-const MAX_PREVIEW_WIDTH = 1200;
-const MODEL_PROFILES = [
+const QA_MODEL_PROFILES = [
   { label: "QA económico", value: "openai/gpt-4o-mini" },
-  { label: "Visión / imagen", value: "openai/gpt-4o-mini" },
   { label: "Más fuerte", value: "openai/gpt-4o" },
 ];
 
-async function blobToDataUrl(blob: Blob) {
-  return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("No se pudo convertir la imagen a data URL."));
-    reader.readAsDataURL(blob);
-  });
-}
-
-async function resizeImageForUpload(file: File, maxWidth = MAX_PREVIEW_WIDTH) {
-  const sourceDataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("No se pudo leer la imagen."));
-    reader.readAsDataURL(file);
-  });
-
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("No se pudo cargar la imagen."));
-    img.src = sourceDataUrl;
-  });
-
-  const scale = Math.min(1, maxWidth / image.width);
-  const width = Math.max(1, Math.round(image.width * scale));
-  const height = Math.max(1, Math.round(image.height * scale));
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-
-  const context = canvas.getContext("2d");
-  if (!context) {
-    throw new Error("No se pudo preparar el canvas para redimensionar la imagen.");
-  }
-
-  context.drawImage(image, 0, 0, width, height);
-
-  const resizedBlob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, "image/jpeg", 0.82);
-  });
-
-  if (!resizedBlob) {
-    throw new Error("No se pudo exportar la imagen redimensionada.");
-  }
-
-  const resizedDataUrl = await blobToDataUrl(resizedBlob);
-  return { blob: resizedBlob, dataUrl: resizedDataUrl };
-}
-
-export default function ConsultTab() {
+export default function ConsultTab({
+  qaModel,
+  onQaModelChange,
+}: {
+  qaModel: string;
+  onQaModelChange: (value: string) => void;
+}) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [imagePreview, setImagePreview] = useState("");
-  const [imageDataUrl, setImageDataUrl] = useState("");
-  const [imageName, setImageName] = useState("");
-  const [imageProcessing, setImageProcessing] = useState(false);
-  const [selectedModel, setSelectedModel] = useState(MODEL_PROFILES[0].value);
+  const [lastCallMeta, setLastCallMeta] = useState<{
+    model: string;
+    requestedAt: string;
+    usage: {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+    };
+  } | null>(null);
 
   const handleAsk = useCallback(
     async (q?: string) => {
@@ -112,7 +69,7 @@ export default function ConsultTab() {
         const res = await fetch("/api/qa", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: query, model: selectedModel }),
+          body: JSON.stringify({ question: query, model: qaModel }),
         });
         const data = await res.json();
 
@@ -129,94 +86,20 @@ export default function ConsultTab() {
         }
 
         setAnswer(data.answer || "");
+        setLastCallMeta({
+          model: data.model || qaModel,
+          requestedAt: data.requestedAt || new Date().toISOString(),
+          usage: data.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        });
       } catch {
         setError("Error de conexion. Verifica tu red e intenta de nuevo.");
       } finally {
         setLoading(false);
       }
     },
-    [question, selectedModel]
+    [question, qaModel]
   );
 
-  const handleAnalyzeImage = useCallback(async () => {
-    if (!imageDataUrl) {
-      setError("Primero toma o selecciona una imagen.");
-      return;
-    }
-
-    setError("");
-    setLoading(true);
-    setAnswer("");
-
-    try {
-      const res = await fetch("/api/image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question:
-            question.trim() ||
-            "Analiza la descripcion visible del campo Rationale en la imagen. Evalua si es especifica, concreta, concisa y apoyada en evidencia observable. Responde en espanol con un JSON valido.",
-          imageDataUrl,
-          model: selectedModel,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        const errorDetail = data.details
-          ? typeof data.details === "string"
-            ? data.details
-            : JSON.stringify(data.details, null, 2)
-          : null;
-        setError(
-          `${data.error || "Error desconocido."}${errorDetail ? `\n\nDetalles: ${errorDetail}` : ""}`
-        );
-        return;
-      }
-
-      setAnswer(data.answer || "");
-    } catch {
-      setError("Error de conexion. Verifica tu red e intenta de nuevo.");
-    } finally {
-      setLoading(false);
-    }
-  }, [imageDataUrl, question, selectedModel]);
-
-  useEffect(() => {
-    return () => {
-      if (imagePreview) {
-        URL.revokeObjectURL(imagePreview);
-      }
-    };
-  }, [imagePreview]);
-
-  const handleImageCapture = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    try {
-      setImageProcessing(true);
-      setError("");
-
-      const { blob, dataUrl } = await resizeImageForUpload(file, MAX_PREVIEW_WIDTH);
-      const previewUrl = URL.createObjectURL(blob);
-      setImagePreview((currentUrl) => {
-        if (currentUrl) {
-          URL.revokeObjectURL(currentUrl);
-        }
-        return previewUrl;
-      });
-      setImageDataUrl(dataUrl);
-      setImageName(file.name);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo preparar la imagen.");
-    } finally {
-      setImageProcessing(false);
-    }
-  }, []);
 
   return (
     <div className="space-y-6">
@@ -234,19 +117,19 @@ export default function ConsultTab() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+          <div className="rounded-lg border bg-muted/30 p-3">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Captura de la descripcion de Rationale
+                Modelo de consulta
               </p>
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>Perfil</span>
+                <span>Consulta</span>
                 <select
-                  value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
+                  value={qaModel}
+                  onChange={(e) => onQaModelChange(e.target.value)}
                   className="rounded-md border bg-background px-2 py-1 text-xs"
                 >
-                  {MODEL_PROFILES.map((profile) => (
+                  {QA_MODEL_PROFILES.map((profile) => (
                     <option key={profile.value} value={profile.value}>
                       {profile.label}
                     </option>
@@ -254,42 +137,6 @@ export default function ConsultTab() {
                 </select>
               </label>
             </div>
-            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-sm hover:bg-muted/60">
-              <span>{imageProcessing ? "Redimensionando foto..." : "Abrir camara / seleccionar captura"}</span>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={handleImageCapture}
-              />
-              <span className="rounded bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
-                Camara
-              </span>
-            </label>
-            {imagePreview && (
-              <div className="space-y-2">
-                <img
-                  src={imagePreview}
-                  alt={imageName || "Foto preparada para analisis"}
-                  className="max-h-72 w-full rounded-md border object-cover"
-                />
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">
-                    Imagen preparada para envio. Se redimensiona automaticamente a un ancho maximo de 1200 px.
-                  </p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={handleAnalyzeImage}
-                    disabled={loading || !imageDataUrl}
-                  >
-                    Analizar imagen
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
           <Textarea
             placeholder="Ej: Si el modelo se reinicio en el turno 3, debo marcar Tech Issues? Afecta la naturalidad?"
@@ -386,12 +233,23 @@ export default function ConsultTab() {
               Respuesta
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <div className="rounded-lg border bg-background overflow-hidden">
               <p className="px-5 py-5 text-base md:text-lg leading-relaxed md:leading-loose whitespace-pre-wrap">
                 {answer}
               </p>
             </div>
+            {lastCallMeta && (
+              <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span><strong>Modelo:</strong> {lastCallMeta.model}</span>
+                  <span><strong>Tokens:</strong> {lastCallMeta.usage.totalTokens}</span>
+                  <span><strong>Prompt:</strong> {lastCallMeta.usage.promptTokens}</span>
+                  <span><strong>Completion:</strong> {lastCallMeta.usage.completionTokens}</span>
+                  <span><strong>Hora:</strong> {new Date(lastCallMeta.requestedAt).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

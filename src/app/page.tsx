@@ -1,18 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { ClipboardList, PenLine, MessageCircleQuestion } from "lucide-react";
+import {
+  ClipboardList,
+  PenLine,
+  MessageCircleQuestion,
+  Settings2,
+} from "lucide-react";
 import EvaluatorTab from "@/components/evaluator-tab";
 import ConsultTab from "@/components/consult-tab";
+import ModelConfigTab from "@/components/model-config-tab";
 
-type TabId = "transcribir" | "consultar";
+type TabId = "transcribir" | "consultar" | "modelos";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>("transcribir");
+  const [qaModel, setQaModel] = useState("openai/gpt-4o-mini");
+  const [imageModel, setImageModel] = useState("openai/gpt-4o-mini");
+  const [analyzeModel, setAnalyzeModel] = useState("openai/gpt-4o-mini");
 
   const tabs: { id: TabId; label: string; icon: typeof PenLine }[] = [
     { id: "transcribir", label: "Transcribir", icon: PenLine },
     { id: "consultar", label: "Consultar", icon: MessageCircleQuestion },
+    { id: "modelos", label: "Modelos", icon: Settings2 },
   ];
 
   return (
@@ -45,11 +55,10 @@ export default function Home() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                  isActive
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md transition-all ${isActive
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 <Icon className="size-4" />
                 {tab.label}
@@ -60,10 +69,23 @@ export default function Home() {
 
         {/* Tab content — both always mounted, hidden via CSS to preserve state */}
         <div className={activeTab === "transcribir" ? "" : "hidden"}>
-          <EvaluatorTab />
+          <EvaluatorTab analyzeModel={analyzeModel} onAnalyzeModelChange={setAnalyzeModel} />
         </div>
         <div className={activeTab === "consultar" ? "" : "hidden"}>
-          <ConsultTab />
+          <ConsultTab
+            qaModel={qaModel}
+            onQaModelChange={setQaModel}
+          />
+        </div>
+        <div className={activeTab === "modelos" ? "" : "hidden"}>
+          <ModelConfigTab
+            qaModel={qaModel}
+            imageModel={imageModel}
+            analyzeModel={analyzeModel}
+            onQaModelChange={setQaModel}
+            onImageModelChange={setImageModel}
+            onAnalyzeModelChange={setAnalyzeModel}
+          />
         </div>
       </main>
     </div>

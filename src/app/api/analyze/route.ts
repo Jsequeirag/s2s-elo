@@ -3,6 +3,7 @@ import {
   callOpenRouter,
   errorResponse,
   extractContent,
+  resolveModelForTask,
 } from "@/lib/openrouter";
 
 const SUBDIMENSION_CRITERIA = [
@@ -84,6 +85,7 @@ const SUBDIMENSION_CRITERIA = [
 
 interface AnalysisRequest {
   justification: string;
+  model?: string;
 }
 
 interface AnalysisResponse {
@@ -130,7 +132,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { justification } = body;
+    const { justification, model: requestedModel } = body;
 
     // 2. Validate justification
     if (!justification || typeof justification !== "string") {
@@ -216,7 +218,9 @@ CRITICAL REMINDERS:
         `Analyze this justification and determine the votes:
 
 """${justification}"""`,
-        0.1
+        0.1,
+        2000,
+        resolveModelForTask("analyze", requestedModel)
       );
       data = result.data;
       modelUsed = result.model;
@@ -319,7 +323,12 @@ CRITICAL REMINDERS:
       subdimensions: fullSubdimensions,
     };
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      usage: extractUsage(data),
+      model: modelUsed || resolveModelForTask("analyze", requestedModel),
+      requestedAt: new Date().toISOString(),
+    });
   } catch (error) {
     // Last-resort catch for unexpected errors
     const msg = error instanceof Error ? error.message : String(error);

@@ -56,11 +56,10 @@ function DimensionRadio({
           key={opt.value}
           type="button"
           onClick={() => onChange(opt.value)}
-          className={`px-3 py-1 text-xs font-semibold rounded-md border-2 transition-all cursor-pointer ${
-            value === opt.value
-              ? `${opt.color} bg-current/10`
-              : "border-muted-foreground/25 text-muted-foreground hover:border-muted-foreground/50"
-          }`}
+          className={`px-3 py-1 text-xs font-semibold rounded-md border-2 transition-all cursor-pointer ${value === opt.value
+            ? `${opt.color} bg-current/10`
+            : "border-muted-foreground/25 text-muted-foreground hover:border-muted-foreground/50"
+            }`}
         >
           {opt.label}
         </button>
@@ -82,7 +81,13 @@ function TaskSuccessBadge({ status }: { status: string }) {
   return <Badge variant={c.variant}>{c.label}</Badge>;
 }
 
-export default function EvaluatorTab() {
+export default function EvaluatorTab({
+  analyzeModel,
+  onAnalyzeModelChange,
+}: {
+  analyzeModel: string;
+  onAnalyzeModelChange: (value: string) => void;
+}) {
   const [justification, setJustification] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -102,7 +107,7 @@ export default function EvaluatorTab() {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ justification: justification.trim() }),
+        body: JSON.stringify({ justification: justification.trim(), model: analyzeModel }),
       });
       const data = await res.json();
 
@@ -124,7 +129,7 @@ export default function EvaluatorTab() {
     } finally {
       setLoading(false);
     }
-  }, [justification]);
+  }, [analyzeModel, justification]);
 
   const updateDimension = (key: string, value: string) => {
     if (!result) return;
@@ -243,6 +248,23 @@ export default function EvaluatorTab() {
       {/* Results */}
       {result && !loading && (
         <div className="space-y-6">
+          {result.model && result.requestedAt && result.usage && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Consumo de llamada</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                  <span><strong>Modelo:</strong> {result.model}</span>
+                  <span><strong>Tokens:</strong> {result.usage.totalTokens}</span>
+                  <span><strong>Prompt:</strong> {result.usage.promptTokens}</span>
+                  <span><strong>Completion:</strong> {result.usage.completionTokens}</span>
+                  <span><strong>Hora:</strong> {new Date(result.requestedAt).toLocaleString()}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Strengthened Justification */}
           <Card>
             <CardHeader>
@@ -342,7 +364,7 @@ export default function EvaluatorTab() {
                       <DimensionRadio
                         value={
                           result.dimensions[
-                            key as keyof typeof result.dimensions
+                          key as keyof typeof result.dimensions
                           ]
                         }
                         onChange={(val) => updateDimension(key, val)}
@@ -428,9 +450,8 @@ export default function EvaluatorTab() {
                 {result.subdimensions.map((sub) => (
                   <div
                     key={sub.id}
-                    className={`grid grid-cols-[1fr_48px_48px] gap-2 px-4 py-3 border-t items-start ${
-                      sub.A || sub.B ? "bg-destructive/5" : ""
-                    }`}
+                    className={`grid grid-cols-[1fr_48px_48px] gap-2 px-4 py-3 border-t items-start ${sub.A || sub.B ? "bg-destructive/5" : ""
+                      }`}
                   >
                     <div className="pr-2">
                       <p className="text-sm font-medium leading-snug">

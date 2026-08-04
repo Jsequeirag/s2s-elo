@@ -28,6 +28,13 @@ export interface AnalysisResult {
     B: boolean;
   };
   subdimensions: Subdimension[];
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+  model?: string;
+  requestedAt?: string;
 }
 
 export const DIMENSION_LABELS: Record<string, string> = {

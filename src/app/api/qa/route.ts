@@ -3,15 +3,25 @@ import {
   callOpenRouter,
   errorResponse,
   extractContent,
+  extractUsage,
   loadReferenceFiles,
+  resolveModelForTask,
 } from "@/lib/openrouter";
 
 interface QARequest {
   question: string;
+  model?: string;
 }
 
 interface QAResponse {
   answer: string;
+  usage: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+  model: string;
+  requestedAt: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -28,7 +38,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { question } = body;
+    const { question, model: requestedModel } = body;
 
     // 2. Validate question
     if (!question || typeof question !== "string") {
@@ -76,7 +86,8 @@ ${guide}`;
         systemPrompt,
         question.trim(),
         0.3,
-        800
+        800,
+        resolveModelForTask("qa", requestedModel)
       );
       data = result.data;
       modelUsed = result.model;
@@ -85,7 +96,7 @@ ${guide}`;
         apiError instanceof Error ? apiError.message : String(apiError);
       const status =
         msg.startsWith("OpenRouter API 401") ||
-        msg.startsWith("OpenRouter API 403")
+          msg.startsWith("OpenRouter API 403")
           ? 503
           : 502;
       return errorResponse("Error al comunicarse con OpenRouter.", status, msg);
@@ -111,7 +122,12 @@ ${guide}`;
       );
     }
 
-    const result: QAResponse = { answer: content.trim() };
+    const result: QAResponse = {
+      answer: content.trim(),
+      usage: extractUsage(data),
+      model: modelUsed || resolveModelForTask("qa", requestedModel),
+      requestedAt: new Date().toISOString(),
+    };
     return NextResponse.json(result);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
