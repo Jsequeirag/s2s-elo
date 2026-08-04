@@ -93,13 +93,16 @@ Reglas:
 2. Compara palabra por palabra contra la justificacion de referencia.
 3. Lista TODAS las desviaciones encontradas, sin excepcion.
 4. Si no hay desviaciones, devuelve deviations: [] e isIdentical: true.
-5. El campo finalText SIEMPRE debe ser igual al texto de la justificacion de referencia (es la meta).
+5. El campo finalText debe ser el texto de la justificacion de referencia, PERO con las palabras o fragmentos que diferian del Rationale marcados en negrita usando **doble asterisco**. Si no hay desviaciones, finalText es la justificacion sin negritas.
 6. Responde EXCLUSIVAMENTE con JSON valido, sin texto adicional.
+
+Ejemplo de finalText con correcciones marcadas:
+"I **prefer** Model A because it successfully completed the task and maintained a smooth dialogue, **information**. In contrast, Model B experienced **hallucinations** about peanuts **from** turn 1..."
 
 Formato de salida:
 {
   "detectedText": "texto exacto extraido del Rationale en la imagen",
-  "finalText": "texto de la justificacion de referencia (la meta)",
+  "finalText": "texto de la justificacion con las correcciones marcadas en **negrita**",
   "isIdentical": true | false,
   "deviations": [
     {

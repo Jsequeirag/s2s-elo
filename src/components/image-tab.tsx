@@ -86,6 +86,23 @@ const DEVIATION_META: Record<
   },
 };
 
+/**
+ * Renders a string with **bold** markdown segments as <strong> elements.
+ */
+function renderMarkdownBold(text: string) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={i} className="font-semibold text-emerald-700 dark:text-emerald-300">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
 export default function ImageTab({
   imageModel,
   onImageModelChange,
@@ -454,7 +471,7 @@ export default function ImageTab({
                 </summary>
                 <div className="px-4 pb-4 pt-1">
                   <div className="rounded-md bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40 p-3 text-sm leading-relaxed whitespace-pre-wrap">
-                    {result.finalText}
+                    {renderMarkdownBold(result.finalText)}
                   </div>
                   <div className="mt-2 flex justify-end">
                     <Button
@@ -462,7 +479,9 @@ export default function ImageTab({
                       size="sm"
                       className="h-7 gap-1.5 text-xs"
                       onClick={() =>
-                        navigator.clipboard?.writeText(result.finalText || "")
+                        navigator.clipboard?.writeText(
+                          result.finalText.replace(/\*\*/g, "") || ""
+                        )
                       }
                     >
                       Copiar
