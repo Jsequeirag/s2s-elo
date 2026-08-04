@@ -19,34 +19,32 @@ import {
   AlertCircle,
   CheckCircle2,
   RotateCcw,
-  GitCompareArrows,
+  Scissors,
+  Type,
+  ArrowLeftRight,
+  Plus,
+  Minus,
 } from "lucide-react";
 
-interface ImageErrorItem {
-  original: string;
-  corrected: string;
-  reason: string;
-  position: number;
-}
+type DeviationType =
+  | "ortografia"
+  | "palabra_cortada"
+  | "texto_faltante"
+  | "texto_extra"
+  | "orden";
 
-interface ComparisonDifference {
+interface Deviation {
+  type: DeviationType;
   rationale: string;
   justification: string;
-  impact: string;
-}
-
-interface ComparisonResult {
-  coherence: string;
-  summary: string;
-  differences?: ComparisonDifference[];
+  reason: string;
 }
 
 interface ImageResult {
-  answer: string;
-  detectedText?: string;
-  correctedText?: string;
-  errors?: ImageErrorItem[];
-  comparison?: ComparisonResult;
+  detectedText: string;
+  finalText: string;
+  isIdentical: boolean;
+  deviations: Deviation[];
   usage: {
     promptTokens: number;
     completionTokens: number;
@@ -56,6 +54,37 @@ interface ImageResult {
   model: string;
   requestedAt: string;
 }
+
+const DEVIATION_META: Record<
+  DeviationType,
+  { label: string; icon: typeof Type; color: string }
+> = {
+  ortografia: {
+    label: "Ortografia",
+    icon: Type,
+    color: "text-amber-600 dark:text-amber-400",
+  },
+  palabra_cortada: {
+    label: "Palabra cortada",
+    icon: Scissors,
+    color: "text-orange-600 dark:text-orange-400",
+  },
+  texto_faltante: {
+    label: "Texto faltante",
+    icon: Minus,
+    color: "text-red-600 dark:text-red-400",
+  },
+  texto_extra: {
+    label: "Texto extra",
+    icon: Plus,
+    color: "text-blue-600 dark:text-blue-400",
+  },
+  orden: {
+    label: "Orden diferente",
+    icon: ArrowLeftRight,
+    color: "text-purple-600 dark:text-purple-400",
+  },
+};
 
 export default function ImageTab({
   imageModel,
@@ -202,9 +231,10 @@ export default function ImageTab({
             Analizar Imagen de Rationale
           </CardTitle>
           <CardDescription>
-            Sube una captura de pantalla con una seccion "Rationale". El sistema
-            extraera el texto, corregira errores ortograficos y listara los
-            errores encontrados.
+            Sube una captura del campo "Rationale". Se compara contra la
+            justificacion guardada (fuente de verdad) y se detectan
+            desviaciones: errores de ortografia, palabras cortadas o texto
+            faltante.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -331,174 +361,115 @@ export default function ImageTab({
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <CheckCircle2 className="size-5 text-emerald-500" />
-                  Analisis Completado
+                  {result.isIdentical ? (
+                    <CheckCircle2 className="size-5 text-emerald-500" />
+                  ) : (
+                    <AlertCircle className="size-5 text-amber-500" />
+                  )}
+                  {result.isIdentical
+                    ? "Rationale coincide con la justificacion"
+                    : "Se encontraron desviaciones"}
                 </CardTitle>
-                {result.comparison && (
-                  <Badge
-                    variant={
-                      result.comparison.coherence === "alta"
-                        ? "default"
-                        : result.comparison.coherence === "media"
-                          ? "secondary"
-                          : "destructive"
-                    }
-                  >
-                    Coherencia {result.comparison.coherence}
-                  </Badge>
-                )}
+                <Badge
+                  variant={
+                    result.isIdentical
+                      ? "default"
+                      : result.deviations.length > 3
+                        ? "destructive"
+                        : "secondary"
+                  }
+                >
+                  {result.deviations.length} desviacion
+                  {result.deviations.length !== 1 ? "es" : ""}
+                </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Comparison summary (natural text) */}
-              {result.comparison?.summary ? (
-                <p className="text-sm leading-relaxed text-foreground">
-                  {result.comparison.summary}
-                </p>
-              ) : result.correctedText ? (
-                <p className="text-sm leading-relaxed text-foreground">
-                  Se detectaron {result.errors?.length || 0} error
-                  {(result.errors?.length || 0) !== 1 ? "es" : ""} ortografico
-                  {(result.errors?.length || 0) !== 1 ? "s" : ""} en el texto del
-                  Rationale.
-                </p>
-              ) : (
-                <p className="text-sm leading-relaxed text-foreground">
-                  {result.answer}
-                </p>
-              )}
+              {/* Summary text */}
+              <p className="text-sm leading-relaxed text-foreground">
+                {result.isIdentical
+                  ? "El texto del Rationale extraido de la imagen es identico a la justificacion guardada. No se detectaron problemas."
+                  : `El Rationale de la imagen tiene ${result.deviations.length} desviacion${result.deviations.length !== 1 ? "es" : ""} respecto a la justificacion (fuente de verdad). Revisa los detalles abajo.`}
+              </p>
 
-              {/* Key differences (always visible, not collapsed) */}
-              {result.comparison?.differences &&
-                result.comparison.differences.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Diferencias con la justificacion guardada
-                    </p>
-                    {result.comparison.differences.map((diff, i) => (
+              {/* Deviations (always visible) */}
+              {result.deviations.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Desviaciones detectadas
+                  </p>
+                  {result.deviations.map((dev, i) => {
+                    const meta = DEVIATION_META[dev.type];
+                    const Icon = meta?.icon || AlertCircle;
+                    return (
                       <div
                         key={i}
-                        className="rounded-lg border p-3 space-y-1.5"
+                        className="rounded-lg border p-3 space-y-2"
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="text-xs text-muted-foreground">
-                            Impacto{" "}
-                            <Badge
-                              variant={
-                                diff.impact === "alto"
-                                  ? "destructive"
-                                  : diff.impact === "medio"
-                                    ? "secondary"
-                                    : "outline"
-                              }
-                              className="ml-1 text-[10px]"
-                            >
-                              {diff.impact}
-                            </Badge>
-                          </span>
+                        <div className="flex items-center gap-2">
+                          <Icon
+                            className={`size-4 ${meta?.color || "text-muted-foreground"}`}
+                          />
+                          <Badge variant="outline" className="text-[10px]">
+                            {meta?.label || dev.type}
+                          </Badge>
                         </div>
                         <div className="grid gap-1.5 sm:grid-cols-2 text-sm">
                           <div>
                             <span className="text-[10px] uppercase text-amber-600 dark:text-amber-400 font-semibold">
-                              Rationale
+                              En el Rationale
                             </span>
-                            <p className="text-amber-700 dark:text-amber-400">
-                              {diff.rationale}
+                            <p className="text-amber-700 dark:text-amber-400 line-through">
+                              {dev.rationale}
                             </p>
                           </div>
                           <div>
-                            <span className="text-[10px] uppercase text-blue-600 dark:text-blue-400 font-semibold">
-                              Justificacion
+                            <span className="text-[10px] uppercase text-emerald-600 dark:text-emerald-400 font-semibold">
+                              Deberia ser
                             </span>
-                            <p className="text-blue-700 dark:text-blue-400">
-                              {diff.justification}
+                            <p className="text-emerald-700 dark:text-emerald-400">
+                              {dev.justification}
                             </p>
                           </div>
                         </div>
+                        <p className="text-xs text-muted-foreground italic">
+                          {dev.reason}
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                )}
-
-              {/* Collapsible: corrected text */}
-              {result.correctedText && (
-                <details className="group rounded-lg border">
-                  <summary className="flex items-center justify-between cursor-pointer px-4 py-2.5 text-sm font-medium hover:bg-muted/40 transition-colors select-none">
-                    <span className="flex items-center gap-2">
-                      <CheckCircle2 className="size-4 text-emerald-500" />
-                      Texto corregido
-                      {result.errors && result.errors.length > 0 && (
-                        <Badge variant="outline" className="text-[10px]">
-                          {result.errors.length} correcciones
-                        </Badge>
-                      )}
-                    </span>
-                    <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">
-                      ▼
-                    </span>
-                  </summary>
-                  <div className="px-4 pb-4 pt-1">
-                    <div className="rounded-md bg-muted/30 p-3 text-sm leading-relaxed whitespace-pre-wrap">
-                      {result.correctedText}
-                    </div>
-                    <div className="mt-2 flex justify-end">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 gap-1.5 text-xs"
-                        onClick={() =>
-                          navigator.clipboard?.writeText(
-                            result.correctedText || ""
-                          )
-                        }
-                      >
-                        Copiar
-                      </Button>
-                    </div>
-                  </div>
-                </details>
+                    );
+                  })}
+                </div>
               )}
 
-              {/* Collapsible: spelling errors table */}
-              {result.errors && result.errors.length > 0 && (
-                <details className="group rounded-lg border">
-                  <summary className="flex items-center justify-between cursor-pointer px-4 py-2.5 text-sm font-medium hover:bg-muted/40 transition-colors select-none">
-                    <span className="flex items-center gap-2">
-                      <AlertCircle className="size-4 text-amber-500" />
-                      Detalle de errores ortograficos
-                    </span>
-                    <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">
-                      ▼
-                    </span>
-                  </summary>
-                  <div className="px-4 pb-4 pt-1">
-                    <div className="space-y-1.5">
-                      {result.errors.map((err, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center gap-2 text-sm py-1"
-                        >
-                          <Badge
-                            variant="outline"
-                            className="w-5 h-5 justify-center text-[10px] p-0"
-                          >
-                            {err.position}
-                          </Badge>
-                          <span className="text-destructive line-through">
-                            {err.original}
-                          </span>
-                          <span className="text-muted-foreground text-xs">
-                            →
-                          </span>
-                          <span className="text-emerald-600 dark:text-emerald-400">
-                            {err.corrected}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+              {/* Final text (= justification, the truth) */}
+              <details className="group rounded-lg border" open={!result.isIdentical}>
+                <summary className="flex items-center justify-between cursor-pointer px-4 py-2.5 text-sm font-medium hover:bg-muted/40 transition-colors select-none">
+                  <span className="flex items-center gap-2">
+                    <CheckCircle2 className="size-4 text-emerald-500" />
+                    Texto correcto (justificacion)
+                  </span>
+                  <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">
+                    ▼
+                  </span>
+                </summary>
+                <div className="px-4 pb-4 pt-1">
+                  <div className="rounded-md bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40 p-3 text-sm leading-relaxed whitespace-pre-wrap">
+                    {result.finalText}
                   </div>
-                </details>
-              )}
+                  <div className="mt-2 flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs"
+                      onClick={() =>
+                        navigator.clipboard?.writeText(result.finalText || "")
+                      }
+                    >
+                      Copiar
+                    </Button>
+                  </div>
+                </div>
+              </details>
 
               {/* Collapsible: original detected text */}
               {result.detectedText && (
@@ -506,7 +477,7 @@ export default function ImageTab({
                   <summary className="flex items-center justify-between cursor-pointer px-4 py-2.5 text-sm font-medium hover:bg-muted/40 transition-colors select-none">
                     <span className="flex items-center gap-2">
                       <ImageIcon className="size-4 text-muted-foreground" />
-                      Texto original detectado
+                      Rationale extraido de la imagen
                     </span>
                     <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">
                       ▼

@@ -14,35 +14,23 @@ interface ImageRequest {
     model?: string;
 }
 
-interface ImageErrorItem {
-    original: string;
-    corrected: string;
-    reason: string;
-    position: number;
-}
-
-interface ComparisonDifference {
+interface Deviation {
+    type: "ortografia" | "palabra_cortada" | "texto_faltante" | "texto_extra" | "orden";
     rationale: string;
     justification: string;
-    impact: string;
-}
-
-interface ComparisonResult {
-    coherence: string;
-    summary: string;
-    differences?: ComparisonDifference[];
+    reason: string;
 }
 
 interface ImageResponse {
-    answer: string;
-    detectedText?: string;
-    correctedText?: string;
-    errors?: ImageErrorItem[];
-    comparison?: ComparisonResult;
+    detectedText: string;
+    finalText: string;
+    isIdentical: boolean;
+    deviations: Deviation[];
     usage: {
         promptTokens: number;
         completionTokens: number;
         totalTokens: number;
+        cost: number;
     };
     model: string;
     requestedAt: string;
@@ -57,11 +45,11 @@ export async function POST(req: NextRequest) {
             return errorResponse(
                 "El cuerpo de la solicitud no es JSON valido.",
                 400,
-                'Asegurate de enviar { "imageDataUrl": "data:image/jpeg;base64,...", "question": "texto opcional" }'
+                'Asegurate de enviar { "imageDataUrl": "data:image/jpeg;base64,..." }'
             );
         }
 
-        const { question, imageDataUrl, model: requestedModel } = body;
+        const { imageDataUrl, model: requestedModel } = body;
 
         if (!imageDataUrl || typeof imageDataUrl !== "string" || !imageDataUrl.startsWith("data:image/")) {
             return errorResponse(
@@ -71,77 +59,63 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Load saved justification for comparison
+        // Load saved justification — it is the SOURCE OF TRUTH.
+        // If missing, we cannot do the comparison.
         const saved = await getLatestJustification();
         const savedJustification = saved?.justification?.trim() || "";
 
-        const defaultPrompt = savedJustification
-            ? `Lee solo la descripcion visible bajo el encabezado Rationale en la imagen. Primero extrae ese bloque de texto. Luego corrige los errores ortograficos de ese texto. Finalmente, compara el texto corregido del Rationale con la siguiente justificacion guardada y evalua su coherencia.
+        if (!savedJustification) {
+            return errorResponse(
+                "No hay una justificacion guardada. Primero genera una justificacion en el tab Transcribir antes de analizar la imagen.",
+                400,
+                "La justificacion generada es la fuente de verdad para comparar el Rationale de la imagen."
+            );
+        }
 
-JUSTIFICACION GUARDADA (texto de referencia limpio, sin errores):
+        const systemPrompt = `Eres un verificador de exactitud. Recibes una imagen con un campo "Rationale" escrito manualmente por un evaluador, y una justificacion de referencia que es la FUENTE DE VERDAD (texto limpio, correcto, ya generado).
+
+Tu unico objetivo es: verificar que el texto del Rationale extraido de la imagen sea IDENTICO a la justificacion de referencia. Cualquier diferencia es una desviacion que debes reportar.
+
+JUSTIFICACION DE REFERENCIA (fuente de verdad):
 """
 ${savedJustification}
 """
 
-Compara el Rationale extraido de la imagen contra esta justificacion. Identifica similitudes, diferencias significativas y si el Rationale cubre los mismos puntos que la justificacion.`
-            : "Lee solo la descripcion visible bajo el encabezado Rationale en la imagen. Primero extrae ese bloque de texto. Luego corrige los errores ortograficos de ese texto y devuelve el texto corregido en formato JSON. La justificacion generada ya esta bien y no debe tocarse.";
-
-        const prompt = (question?.trim() || defaultPrompt).trim();
-
-        const systemPrompt = `Eres un analizador visual especializado en lectura de capturas de pantalla. Tu tarea es extraer y corregir el texto que aparece inmediatamente debajo del encabezado Rationale en la imagen, y compararlo con una justificacion de referencia si se proporciona.
-
-Objetivo:
-- Leer unicamente la descripcion del campo Rationale.
-- Si el texto tiene errores ortograficos, corregirlos.
-- Dejar intacta cualquier justificacion generada en otra pantalla; tu trabajo es corregir el texto de la imagen, no la justificacion.
-- Si se proporciona una justificacion de referencia, comparar el Rationale corregido contra ella.
-- Responder EXCLUSIVAMENTE con JSON valido, en espanol.
+Tipos de desviaciones que debes detectar:
+- ortografia: errores de ortografia (ej. "prefr" en vez de "prefer")
+- palabra_cortada: palabras incompletas o cortadas (ej. "informatio" en vez de "information")
+- texto_faltante: fragmentos que aparecen en la justificacion pero NO en el Rationale
+- texto_extra: fragmentos que aparecen en el Rationale pero NO en la justificacion
+- orden: palabras o frases en orden diferente
 
 Reglas:
-1. Extrae solo el texto bajo "Rationale".
-2. Si no se distingue claramente ese bloque, responde indicando que no se ve el texto del Rationale.
-3. Devuelve el texto original y el texto corregido.
-4. Lista los errores ortograficos en orden de aparicion dentro del texto.
-5. No des nada fuera del JSON.
-6. Mantente preciso y conciso.
+1. Extrae el texto completo del Rationale de la imagen.
+2. Compara palabra por palabra contra la justificacion de referencia.
+3. Lista TODAS las desviaciones encontradas, sin excepcion.
+4. Si no hay desviaciones, devuelve deviations: [] e isIdentical: true.
+5. El campo finalText SIEMPRE debe ser igual al texto de la justificacion de referencia (es la meta).
+6. Responde EXCLUSIVAMENTE con JSON valido, sin texto adicional.
 
-${savedJustification ? `Reglas de comparacion:
-7. Compara el texto del Rationale (texto manual, puede tener errores) contra la justificacion guardada (texto limpio y sin errores).
-8. Evalua la coherencia: ¿el Rationale dice lo mismo que la justificacion? ¿Falta informacion? ¿Hay contradicciones?
-9. Clasifica la coherencia como "alta", "media" o "baja".
-10. Lista las diferencias significativas encontradas.` : ""}
-
-Responde con este formato${savedJustification ? " (incluyendo la comparacion)" : ""}:
+Formato de salida:
 {
-  "detectedText": "texto extraido de la imagen",
-  "correctedText": "texto corregido con las palabras erradas marcadas con **",
-  "errors": [
+  "detectedText": "texto exacto extraido del Rationale en la imagen",
+  "finalText": "texto de la justificacion de referencia (la meta)",
+  "isIdentical": true | false,
+  "deviations": [
     {
-      "original": "palabra errada",
-      "corrected": "palabra correcta",
-      "reason": "ortografia",
-      "position": 1
+      "type": "ortografia" | "palabra_cortada" | "texto_faltante" | "texto_extra" | "orden",
+      "rationale": "fragmento del Rationale con el problema",
+      "justification": "fragmento correspondiente de la justificacion correcta",
+      "reason": "explicacion breve del problema"
     }
-  ]${savedJustification ? `,
-  "comparison": {
-    "coherence": "alta" | "media" | "baja",
-    "summary": "resumen de la comparacion en espanol",
-    "differences": [
-      {
-        "rationale": "fragmento del texto del Rationale",
-        "justification": "fragmento correspondiente de la justificacion",
-        "impact": "alto" | "medio" | "bajo"
-      }
-    ]
-  }` : ""},
-  "summary": "resumen breve en espanol"
+  ]
 }`;
 
         try {
             const result = await callOpenRouter(
                 systemPrompt,
-                prompt,
-                0.2,
+                "Analiza esta imagen. Extrae el texto del Rationale, comparalo contra la justificacion de referencia, y reporta todas las desviaciones.",
+                0.1,
                 4000,
                 resolveModelForTask("image", requestedModel),
                 [
@@ -152,7 +126,10 @@ Responde con este formato${savedJustification ? " (incluyendo la comparacion)" :
                     {
                         role: "user",
                         content: [
-                            { type: "text", text: prompt },
+                            {
+                                type: "text",
+                                text: "Analiza esta imagen. Extrae el texto del Rationale, comparalo contra la justificacion de referencia, y reporta todas las desviaciones.",
+                            },
                             { type: "image_url", image_url: { url: imageDataUrl } },
                         ],
                     },
@@ -171,26 +148,28 @@ Responde con este formato${savedJustification ? " (incluyendo la comparacion)" :
                 );
             }
 
-            let parsedAnswer: Partial<ImageResponse> = {};
+            // Strip markdown fences if present
+            let parsed: Partial<ImageResponse> = {};
             try {
-                // Strip markdown fences if present (```json ... ``` or ``` ... ```)
                 const cleaned = content
                     .replace(/^```(?:json)?\s*/i, "")
                     .replace(/\s*```$/i, "")
                     .trim();
-                parsedAnswer = JSON.parse(cleaned);
+                parsed = JSON.parse(cleaned);
             } catch {
-                parsedAnswer = {
-                    answer: content.trim(),
+                parsed = {
+                    detectedText: content.trim(),
+                    finalText: savedJustification,
+                    isIdentical: false,
+                    deviations: [],
                 };
             }
 
             const response: ImageResponse = {
-                answer: parsedAnswer.correctedText || parsedAnswer.answer || content.trim(),
-                detectedText: parsedAnswer.detectedText,
-                correctedText: parsedAnswer.correctedText,
-                errors: parsedAnswer.errors,
-                comparison: parsedAnswer.comparison,
+                detectedText: parsed.detectedText || content.trim(),
+                finalText: savedJustification,
+                isIdentical: parsed.isIdentical ?? false,
+                deviations: parsed.deviations || [],
                 usage: extractUsage(result.data),
                 model: result.model || resolveModelForTask("image", requestedModel),
                 requestedAt: new Date().toISOString(),
