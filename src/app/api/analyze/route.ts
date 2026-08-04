@@ -1,74 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { instructions as instructionsContent } from "@/lib/instructions";
-import { guide as guideContent } from "@/lib/guide";
-
-/**
- * Reference files are imported as raw strings at build time (via .ts modules
- * that export template-literal strings) so they are always available inside
- * the serverless bundle on Vercel. No runtime fs.readFile needed.
- */
-function loadReferenceFiles() {
-  return {
-    instructions: instructionsContent,
-    guide: guideContent,
-  };
-}
-
-/**
- * Calls the OpenRouter Chat Completions API (OpenAI-compatible).
- * Requires OPENROUTER_API_KEY in the environment. The model defaults to
- * DeepSeek V4 Flash and can be overridden via OPENROUTER_MODEL.
- *
- * Docs: https://openrouter.ai/docs
- */
-async function callOpenRouter(
-  systemPrompt: string,
-  userPrompt: string,
-  temperature: number
-) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  const model = process.env.OPENROUTER_MODEL || "deepseek/deepseek-v4-flash";
-
-  if (!apiKey) {
-    throw new Error(
-      "Falta OPENROUTER_API_KEY. Configurala en Vercel > Settings > Environment Variables."
-    );
-  }
-
-  const res = await fetch(
-    "https://openrouter.ai/api/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        // Optional but recommended by OpenRouter for analytics/routing.
-        "HTTP-Referer": "https://s2s-elo.vercel.app",
-        "X-Title": "Live S2S ELO Evaluator",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature,
-        // Lower max_tokens keeps cost down and forces concise output.
-        max_tokens: 2000,
-      }),
-    }
-  );
-
-  if (!res.ok) {
-    const errorBody = await res.text();
-    throw new Error(
-      `OpenRouter API ${res.status}: ${errorBody.slice(0, 500)}`
-    );
-  }
-
-  const data = await res.json();
-  return { data, model };
-}
+import {
+  callOpenRouter,
+  errorResponse,
+  extractContent,
+} from "@/lib/openrouter";
 
 const SUBDIMENSION_CRITERIA = [
   {
@@ -179,18 +114,6 @@ interface AnalysisResponse {
     A: boolean;
     B: boolean;
   }[];
-}
-
-function errorResponse(message: string, status: number, details?: unknown) {
-  console.error(`[API /api/analyze] ${status}: ${message}`, details || "");
-  return NextResponse.json(
-    {
-      error: message,
-      details: details ?? null,
-      timestamp: new Date().toISOString(),
-    },
-    { status }
-  );
 }
 
 export async function POST(req: NextRequest) {
@@ -320,7 +243,7 @@ CRITICAL REMINDERS:
     }
 
     // 6. Extract content
-    const content = data?.choices?.[0]?.message?.content || "";
+    const content = extractContent(data);
 
     if (!content.trim()) {
       return errorResponse(
