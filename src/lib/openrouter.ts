@@ -3,7 +3,7 @@ import { instructions as instructionsContent } from "@/lib/instructions";
 import { guide as guideContent } from "@/lib/guide";
 import { getReferenceDoc } from "@/lib/mongodb";
 
-export type OpenRouterTask = "analyze" | "qa" | "image";
+export type OpenRouterTask = "analyze" | "qa" | "image" | "dialog";
 
 type OpenRouterMessageContentItem =
   | { type: "text"; text: string }
@@ -54,6 +54,7 @@ export function resolveModelForTask(task: OpenRouterTask, requestModel?: string)
     analyze: "OPENROUTER_MODEL_ANALYZE",
     qa: "OPENROUTER_MODEL_QA",
     image: "OPENROUTER_MODEL_IMAGE",
+    dialog: "OPENROUTER_MODEL_DIALOG",
   };
 
   const taskModel = process.env[envVarMap[task]]?.trim();

@@ -19,6 +19,7 @@ import {
   AlertCircle,
   CheckCircle2,
   RotateCcw,
+  GitCompareArrows,
 } from "lucide-react";
 
 interface ImageErrorItem {
@@ -28,11 +29,24 @@ interface ImageErrorItem {
   position: number;
 }
 
+interface ComparisonDifference {
+  rationale: string;
+  justification: string;
+  impact: string;
+}
+
+interface ComparisonResult {
+  coherence: string;
+  summary: string;
+  differences?: ComparisonDifference[];
+}
+
 interface ImageResult {
   answer: string;
   detectedText?: string;
   correctedText?: string;
   errors?: ImageErrorItem[];
+  comparison?: ComparisonResult;
   usage: {
     promptTokens: number;
     completionTokens: number;
@@ -219,6 +233,7 @@ export default function ImageTab({
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              capture="environment"
               className="hidden"
               onChange={handleFileChange}
             />
@@ -237,7 +252,7 @@ export default function ImageTab({
               <div className="flex flex-col items-center justify-center py-10 gap-3">
                 <Upload className="size-8 text-muted-foreground/50" />
                 <p className="text-sm text-muted-foreground">
-                  Haz click o arrastra una imagen
+                  Toma una foto o selecciona una imagen
                 </p>
                 <p className="text-xs text-muted-foreground/60">
                   PNG, JPG, WebP — captura de pantalla con seccion Rationale
@@ -425,6 +440,82 @@ export default function ImageTab({
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Comparison with saved justification */}
+          {result.comparison && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <GitCompareArrows className="size-5 text-blue-500" />
+                    Comparacion con Justificacion
+                  </CardTitle>
+                  <Badge
+                    variant={
+                      result.comparison.coherence === "alta"
+                        ? "default"
+                        : result.comparison.coherence === "media"
+                          ? "secondary"
+                          : "destructive"
+                    }
+                  >
+                    Coherencia {result.comparison.coherence}
+                  </Badge>
+                </div>
+                <CardDescription>
+                  Comparacion del texto del Rationale (manual) contra la justificacion guardada.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {result.comparison.summary && (
+                  <div className="rounded-lg border bg-muted/30 p-4 text-sm leading-relaxed whitespace-pre-wrap">
+                    {result.comparison.summary}
+                  </div>
+                )}
+
+                {result.comparison.differences && result.comparison.differences.length > 0 && (
+                  <div className="rounded-lg border overflow-hidden">
+                    <div className="grid grid-cols-[1fr_1fr_auto] gap-2 px-4 py-2.5 bg-muted/80 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      <span>Rationale (imagen)</span>
+                      <span>Justificacion (guardada)</span>
+                      <span>Impacto</span>
+                    </div>
+                    {result.comparison.differences.map((diff, i) => (
+                      <div
+                        key={i}
+                        className="grid grid-cols-[1fr_1fr_auto] gap-2 px-4 py-3 border-t items-start text-sm"
+                      >
+                        <span className="text-amber-700 dark:text-amber-400">
+                          {diff.rationale}
+                        </span>
+                        <span className="text-blue-700 dark:text-blue-400">
+                          {diff.justification}
+                        </span>
+                        <Badge
+                          variant={
+                            diff.impact === "alto"
+                              ? "destructive"
+                              : diff.impact === "medio"
+                                ? "secondary"
+                                : "outline"
+                          }
+                          className="text-xs shrink-0"
+                        >
+                          {diff.impact}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(!result.comparison.differences || result.comparison.differences.length === 0) && (
+                  <p className="text-sm text-muted-foreground italic">
+                    No se encontraron diferencias significativas.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}

@@ -27,6 +27,7 @@ export interface JustificationDocument extends Document {
   justification: string;
   analysis: Record<string, unknown>;
   imageAnalysis?: Record<string, unknown>;
+  dialogue?: Record<string, unknown>;
   updatedAt: string;
 }
 
@@ -107,6 +108,49 @@ export async function clearImageAnalysis(): Promise<void> {
 }
 
 /**
+ * Updates only the dialogue field of the current scenario document.
+ * No-ops if there is no document yet.
+ */
+export async function saveDialogue(
+  dialogue: Record<string, unknown>
+): Promise<void> {
+  const client = await getClient();
+  const db = client.db(DB_NAME);
+
+  const result = await db
+    .collection<JustificationDocument>(COLLECTION)
+    .updateOne(
+      {},
+      { $set: { dialogue, updatedAt: new Date().toISOString() } }
+    );
+
+  if (result.matchedCount === 0) {
+    await db.collection<JustificationDocument>(COLLECTION).insertOne({
+      justification: "",
+      analysis: {},
+      dialogue,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+}
+
+/**
+ * Clears the dialogue field of the current scenario document.
+ */
+export async function clearDialogue(): Promise<void> {
+  const client = await getClient();
+  const db = client.db(DB_NAME);
+
+  const result = await db
+    .collection<JustificationDocument>(COLLECTION)
+    .updateOne({}, { $unset: { dialogue: "" }, $set: { updatedAt: new Date().toISOString() } });
+
+  if (result.matchedCount === 0) {
+    // No-op
+  }
+}
+
+/**
  * Clears all saved justifications.
  */
 export async function clearJustification(): Promise<void> {
@@ -161,4 +205,57 @@ export async function clearReferenceDocs(): Promise<void> {
   const client = await getClient();
   const db = client.db(DB_NAME);
   await db.collection(REF_COLLECTION).deleteMany({});
+}
+
+// ── App config (model selection per task) ───────────────────────────────
+
+const CONFIG_COLLECTION = "config";
+
+export interface ConfigDocument extends Document {
+  key: string;
+  value: string;
+  updatedAt: string;
+}
+
+const MODEL_KEYS = ["qaModel", "imageModel", "analyzeModel", "dialogModel"] as const;
+
+/**
+ * Returns all saved model config values, using defaults for missing keys.
+ */
+export async function getModelConfig(): Promise<{
+  qaModel: string;
+  imageModel: string;
+  analyzeModel: string;
+  dialogModel: string;
+}> {
+  const client = await getClient();
+  const db = client.db(DB_NAME);
+  const docs = await db
+    .collection<ConfigDocument>(CONFIG_COLLECTION)
+    .find({ key: { $in: [...MODEL_KEYS] } })
+    .toArray();
+
+  const map = new Map(docs.map((d) => [d.key, d.value]));
+  return {
+    qaModel: map.get("qaModel") || "openai/gpt-4o-mini",
+    imageModel: map.get("imageModel") || "openai/gpt-4o-mini",
+    analyzeModel: map.get("analyzeModel") || "openai/gpt-4o-mini",
+    dialogModel: map.get("dialogModel") || "openai/gpt-4o-mini",
+  };
+}
+
+/**
+ * Saves a model config value, upserting by key.
+ */
+export async function saveModelConfig(
+  key: string,
+  value: string
+): Promise<void> {
+  const client = await getClient();
+  const db = client.db(DB_NAME);
+  await db.collection(CONFIG_COLLECTION).updateOne(
+    { key },
+    { $set: { value, updatedAt: new Date().toISOString() } },
+    { upsert: true }
+  );
 }

@@ -6,6 +6,7 @@ import {
     extractUsage,
     resolveModelForTask,
 } from "@/lib/openrouter";
+import { getLatestJustification } from "@/lib/mongodb";
 
 interface ImageRequest {
     question?: string;
@@ -20,11 +21,24 @@ interface ImageErrorItem {
     position: number;
 }
 
+interface ComparisonDifference {
+    rationale: string;
+    justification: string;
+    impact: string;
+}
+
+interface ComparisonResult {
+    coherence: string;
+    summary: string;
+    differences?: ComparisonDifference[];
+}
+
 interface ImageResponse {
     answer: string;
     detectedText?: string;
     correctedText?: string;
     errors?: ImageErrorItem[];
+    comparison?: ComparisonResult;
     usage: {
         promptTokens: number;
         completionTokens: number;
@@ -57,17 +71,30 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const prompt = (
-            question?.trim() ||
-            "Lee solo la descripcion visible bajo el encabezado Rationale en la imagen. Primero extrae ese bloque de texto. Luego corrige los errores ortograficos de ese texto y devuelve el texto corregido en formato JSON. La justificacion generada ya esta bien y no debe tocarse."
-        ).trim();
+        // Load saved justification for comparison
+        const saved = await getLatestJustification();
+        const savedJustification = saved?.justification?.trim() || "";
 
-        const systemPrompt = `Eres un analizador visual especializado en lectura de capturas de pantalla. Tu tarea es extraer y corregir el texto que aparece inmediatamente debajo del encabezado Rationale en la imagen.
+        const defaultPrompt = savedJustification
+            ? `Lee solo la descripcion visible bajo el encabezado Rationale en la imagen. Primero extrae ese bloque de texto. Luego corrige los errores ortograficos de ese texto. Finalmente, compara el texto corregido del Rationale con la siguiente justificacion guardada y evalua su coherencia.
+
+JUSTIFICACION GUARDADA (texto de referencia limpio, sin errores):
+"""
+${savedJustification}
+"""
+
+Compara el Rationale extraido de la imagen contra esta justificacion. Identifica similitudes, diferencias significativas y si el Rationale cubre los mismos puntos que la justificacion.`
+            : "Lee solo la descripcion visible bajo el encabezado Rationale en la imagen. Primero extrae ese bloque de texto. Luego corrige los errores ortograficos de ese texto y devuelve el texto corregido en formato JSON. La justificacion generada ya esta bien y no debe tocarse.";
+
+        const prompt = (question?.trim() || defaultPrompt).trim();
+
+        const systemPrompt = `Eres un analizador visual especializado en lectura de capturas de pantalla. Tu tarea es extraer y corregir el texto que aparece inmediatamente debajo del encabezado Rationale en la imagen, y compararlo con una justificacion de referencia si se proporciona.
 
 Objetivo:
-- Leer únicamente la descripcion del campo Rationale.
+- Leer unicamente la descripcion del campo Rationale.
 - Si el texto tiene errores ortograficos, corregirlos.
 - Dejar intacta cualquier justificacion generada en otra pantalla; tu trabajo es corregir el texto de la imagen, no la justificacion.
+- Si se proporciona una justificacion de referencia, comparar el Rationale corregido contra ella.
 - Responder EXCLUSIVAMENTE con JSON valido, en espanol.
 
 Reglas:
@@ -78,7 +105,13 @@ Reglas:
 5. No des nada fuera del JSON.
 6. Mantente preciso y conciso.
 
-Responde con este formato:
+${savedJustification ? `Reglas de comparacion:
+7. Compara el texto del Rationale (texto manual, puede tener errores) contra la justificacion guardada (texto limpio y sin errores).
+8. Evalua la coherencia: ¿el Rationale dice lo mismo que la justificacion? ¿Falta informacion? ¿Hay contradicciones?
+9. Clasifica la coherencia como "alta", "media" o "baja".
+10. Lista las diferencias significativas encontradas.` : ""}
+
+Responde con este formato${savedJustification ? " (incluyendo la comparacion)" : ""}:
 {
   "detectedText": "texto extraido de la imagen",
   "correctedText": "texto corregido con las palabras erradas marcadas con **",
@@ -89,7 +122,18 @@ Responde con este formato:
       "reason": "ortografia",
       "position": 1
     }
-  ],
+  ]${savedJustification ? `,
+  "comparison": {
+    "coherence": "alta" | "media" | "baja",
+    "summary": "resumen de la comparacion en espanol",
+    "differences": [
+      {
+        "rationale": "fragmento del texto del Rationale",
+        "justification": "fragmento correspondiente de la justificacion",
+        "impact": "alto" | "medio" | "bajo"
+      }
+    ]
+  }` : ""},
   "summary": "resumen breve en espanol"
 }`;
 
@@ -141,6 +185,7 @@ Responde con este formato:
                 detectedText: parsedAnswer.detectedText,
                 correctedText: parsedAnswer.correctedText,
                 errors: parsedAnswer.errors,
+                comparison: parsedAnswer.comparison,
                 usage: extractUsage(result.data),
                 model: result.model || resolveModelForTask("image", requestedModel),
                 requestedAt: new Date().toISOString(),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ClipboardList,
   PenLine,
@@ -8,25 +8,94 @@ import {
   Settings2,
   ImageIcon,
   FileText,
+  MessageSquare,
 } from "lucide-react";
 import EvaluatorTab from "@/components/evaluator-tab";
 import ConsultTab from "@/components/consult-tab";
 import ImageTab from "@/components/image-tab";
 import ModelConfigTab from "@/components/model-config-tab";
 import DocumentsTab from "@/components/documents-tab";
+import DialogTab from "@/components/dialog-tab";
 
-type TabId = "transcribir" | "consultar" | "imagen" | "modelos" | "documentos";
+type TabId = "transcribir" | "consultar" | "imagen" | "dialogo" | "modelos" | "documentos";
+
+const DEFAULT_MODEL = "openai/gpt-4o-mini";
+
+// Debounced persist to MongoDB — avoids saving on every keystroke
+function useModelPersist(key: string) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  return useCallback((value: string) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value }),
+      }).catch(() => { /* best-effort */ });
+    }, 500);
+  }, [key]);
+}
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>("transcribir");
-  const [qaModel, setQaModel] = useState("openai/gpt-4o-mini");
-  const [imageModel, setImageModel] = useState("openai/gpt-4o-mini");
-  const [analyzeModel, setAnalyzeModel] = useState("openai/gpt-4o-mini");
+  const [qaModel, setQaModel] = useState(DEFAULT_MODEL);
+  const [imageModel, setImageModel] = useState(DEFAULT_MODEL);
+  const [analyzeModel, setAnalyzeModel] = useState(DEFAULT_MODEL);
+  const [dialogModel, setDialogModel] = useState(DEFAULT_MODEL);
+  const [configLoaded, setConfigLoaded] = useState(false);
+
+  const persistQa = useModelPersist("qaModel");
+  const persistImage = useModelPersist("imageModel");
+  const persistAnalyze = useModelPersist("analyzeModel");
+  const persistDialog = useModelPersist("dialogModel");
+
+  // Load saved model config from MongoDB on mount
+  useEffect(() => {
+    if (configLoaded) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/config");
+        const json = await res.json();
+        if (res.ok && json.data) {
+          if (json.data.qaModel) setQaModel(json.data.qaModel);
+          if (json.data.imageModel) setImageModel(json.data.imageModel);
+          if (json.data.analyzeModel) setAnalyzeModel(json.data.analyzeModel);
+          if (json.data.dialogModel) setDialogModel(json.data.dialogModel);
+        }
+      } catch {
+        // Silently fail — use defaults
+      } finally {
+        setConfigLoaded(true);
+      }
+    })();
+  }, [configLoaded]);
+
+  const handleQaModelChange = useCallback((value: string) => {
+    setQaModel(value);
+    persistQa(value);
+  }, [persistQa]);
+
+  const handleImageModelChange = useCallback((value: string) => {
+    setImageModel(value);
+    persistImage(value);
+  }, [persistImage]);
+
+  const handleAnalyzeModelChange = useCallback((value: string) => {
+    setAnalyzeModel(value);
+    persistAnalyze(value);
+  }, [persistAnalyze]);
+
+  const handleDialogModelChange = useCallback((value: string) => {
+    setDialogModel(value);
+    persistDialog(value);
+  }, [persistDialog]);
 
   const tabs: { id: TabId; label: string; icon: typeof PenLine }[] = [
     { id: "transcribir", label: "Transcribir", icon: PenLine },
     { id: "consultar", label: "Consultar", icon: MessageCircleQuestion },
     { id: "imagen", label: "Imagen", icon: ImageIcon },
+    { id: "dialogo", label: "Dialogo", icon: MessageSquare },
     { id: "modelos", label: "Modelos", icon: Settings2 },
     { id: "documentos", label: "Documentos", icon: FileText },
   ];
@@ -75,18 +144,24 @@ export default function Home() {
 
         {/* Tab content — all always mounted, hidden via CSS to preserve state */}
         <div className={activeTab === "transcribir" ? "" : "hidden"}>
-          <EvaluatorTab analyzeModel={analyzeModel} onAnalyzeModelChange={setAnalyzeModel} />
+          <EvaluatorTab analyzeModel={analyzeModel} onAnalyzeModelChange={handleAnalyzeModelChange} />
         </div>
         <div className={activeTab === "consultar" ? "" : "hidden"}>
           <ConsultTab
             qaModel={qaModel}
-            onQaModelChange={setQaModel}
+            onQaModelChange={handleQaModelChange}
           />
         </div>
         <div className={activeTab === "imagen" ? "" : "hidden"}>
           <ImageTab
             imageModel={imageModel}
-            onImageModelChange={setImageModel}
+            onImageModelChange={handleImageModelChange}
+          />
+        </div>
+        <div className={activeTab === "dialogo" ? "" : "hidden"}>
+          <DialogTab
+            dialogModel={dialogModel}
+            onDialogModelChange={handleDialogModelChange}
           />
         </div>
         <div className={activeTab === "modelos" ? "" : "hidden"}>
@@ -94,9 +169,9 @@ export default function Home() {
             qaModel={qaModel}
             imageModel={imageModel}
             analyzeModel={analyzeModel}
-            onQaModelChange={setQaModel}
-            onImageModelChange={setImageModel}
-            onAnalyzeModelChange={setAnalyzeModel}
+            onQaModelChange={handleQaModelChange}
+            onImageModelChange={handleImageModelChange}
+            onAnalyzeModelChange={handleAnalyzeModelChange}
           />
         </div>
         <div className={activeTab === "documentos" ? "" : "hidden"}>
