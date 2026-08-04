@@ -173,7 +173,12 @@ Responde con este formato${savedJustification ? " (incluyendo la comparacion)" :
 
             let parsedAnswer: Partial<ImageResponse> = {};
             try {
-                parsedAnswer = JSON.parse(content);
+                // Strip markdown fences if present (```json ... ``` or ``` ... ```)
+                const cleaned = content
+                    .replace(/^```(?:json)?\s*/i, "")
+                    .replace(/\s*```$/i, "")
+                    .trim();
+                parsedAnswer = JSON.parse(cleaned);
             } catch {
                 parsedAnswer = {
                     answer: content.trim(),
