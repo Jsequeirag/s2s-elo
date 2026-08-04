@@ -98,7 +98,7 @@ Responde con este formato:
                 systemPrompt,
                 prompt,
                 0.2,
-                800,
+                4000,
                 resolveModelForTask("image", requestedModel),
                 [
                     {
