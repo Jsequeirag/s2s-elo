@@ -9,6 +9,9 @@ import {
 } from "@/lib/openrouter";
 import { getLatestJustification } from "@/lib/mongodb";
 
+// Allow up to 60s for long generation calls.
+export const maxDuration = 60;
+
 const SUBDIMENSION_CRITERIA = [
   {
     id: "llm-isms",

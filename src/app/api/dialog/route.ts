@@ -8,6 +8,9 @@ import {
 } from "@/lib/openrouter";
 import { saveTaskSpec } from "@/lib/mongodb";
 
+// Allow up to 60s for vision model calls (image processing is slow).
+export const maxDuration = 60;
+
 interface DialogRequest {
   imageDataUrl: string;
   model?: string;
