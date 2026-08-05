@@ -123,8 +123,8 @@ export default function DialogTab({
         // Resize/compress large images (especially phone photos)
         const img = new Image();
         img.onload = () => {
-          const MAX_DIM = 1600;
-          const QUALITY = 0.8;
+          const MAX_DIM = 2560;
+          const QUALITY = 0.85;
 
           let { width, height } = img;
           if (width > MAX_DIM || height > MAX_DIM) {

@@ -196,8 +196,8 @@ export default function ImageTab({
         // Vercel body limits and OpenRouter size rejections.
         const img = new Image();
         img.onload = () => {
-          const MAX_DIM = 1600; // max width/height in pixels
-          const QUALITY = 0.8; // JPEG quality
+          const MAX_DIM = 2560; // max width/height in pixels
+          const QUALITY = 0.85; // JPEG quality
 
           let { width, height } = img;
           if (width > MAX_DIM || height > MAX_DIM) {
