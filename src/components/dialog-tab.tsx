@@ -120,30 +120,21 @@ export default function DialogTab({
       reader.onload = () => {
         const originalDataUrl = reader.result as string;
 
-        // Resize/compress large images (especially phone photos)
+        // Re-encode as JPEG at quality 0.9 to reduce file size WITHOUT
+        // resizing (preserves full resolution for text legibility).
         const img = new Image();
         img.onload = () => {
-          const MAX_DIM = 1600;
-          const QUALITY = 0.8;
-
-          let { width, height } = img;
-          if (width > MAX_DIM || height > MAX_DIM) {
-            const scale = Math.min(MAX_DIM / width, MAX_DIM / height);
-            width = Math.round(width * scale);
-            height = Math.round(height * scale);
-          }
-
           const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
           const ctx = canvas.getContext("2d");
           if (!ctx) {
             setImageDataUrl(originalDataUrl);
             setImagePreview(originalDataUrl);
             return;
           }
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressed = canvas.toDataURL("image/jpeg", QUALITY);
+          ctx.drawImage(img, 0, 0);
+          const compressed = canvas.toDataURL("image/jpeg", 0.9);
 
           if (compressed.length < originalDataUrl.length) {
             setImageDataUrl(compressed);
