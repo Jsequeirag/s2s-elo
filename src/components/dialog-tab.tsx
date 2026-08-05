@@ -118,9 +118,46 @@ export default function DialogTab({
 
       const reader = new FileReader();
       reader.onload = () => {
-        const dataUrl = reader.result as string;
-        setImagePreview(dataUrl);
-        setImageDataUrl(dataUrl);
+        const originalDataUrl = reader.result as string;
+
+        // Resize/compress large images (especially phone photos)
+        const img = new Image();
+        img.onload = () => {
+          const MAX_DIM = 1600;
+          const QUALITY = 0.8;
+
+          let { width, height } = img;
+          if (width > MAX_DIM || height > MAX_DIM) {
+            const scale = Math.min(MAX_DIM / width, MAX_DIM / height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            setImageDataUrl(originalDataUrl);
+            setImagePreview(originalDataUrl);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL("image/jpeg", QUALITY);
+
+          if (compressed.length < originalDataUrl.length) {
+            setImageDataUrl(compressed);
+            setImagePreview(compressed);
+          } else {
+            setImageDataUrl(originalDataUrl);
+            setImagePreview(originalDataUrl);
+          }
+        };
+        img.onerror = () => {
+          setImageDataUrl(originalDataUrl);
+          setImagePreview(originalDataUrl);
+        };
+        img.src = originalDataUrl;
       };
       reader.readAsDataURL(file);
     },

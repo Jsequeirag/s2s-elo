@@ -190,9 +190,52 @@ export default function ImageTab({
 
       const reader = new FileReader();
       reader.onload = () => {
-        const dataUrl = reader.result as string;
-        setImageDataUrl(dataUrl);
-        setImagePreview(dataUrl);
+        const originalDataUrl = reader.result as string;
+
+        // Resize/compress large images (especially phone photos) to avoid
+        // Vercel body limits and OpenRouter size rejections.
+        const img = new Image();
+        img.onload = () => {
+          const MAX_DIM = 1600; // max width/height in pixels
+          const QUALITY = 0.8; // JPEG quality
+
+          let { width, height } = img;
+          if (width > MAX_DIM || height > MAX_DIM) {
+            const scale = Math.min(MAX_DIM / width, MAX_DIM / height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            // If canvas fails, use original
+            setImageDataUrl(originalDataUrl);
+            setImagePreview(originalDataUrl);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Always export as JPEG to keep size down (even if original was PNG)
+          const compressed = canvas.toDataURL("image/jpeg", QUALITY);
+
+          // Only use compressed if it's actually smaller
+          if (compressed.length < originalDataUrl.length) {
+            setImageDataUrl(compressed);
+            setImagePreview(compressed);
+          } else {
+            setImageDataUrl(originalDataUrl);
+            setImagePreview(originalDataUrl);
+          }
+        };
+        img.onerror = () => {
+          // If image load fails, use original data URL
+          setImageDataUrl(originalDataUrl);
+          setImagePreview(originalDataUrl);
+        };
+        img.src = originalDataUrl;
       };
       reader.readAsDataURL(file);
     },
@@ -235,8 +278,14 @@ export default function ImageTab({
       setResult(data);
       // Persist after successful analysis
       persist(data);
-    } catch {
-      setError("Error de conexion. Verifica tu red e intenta de nuevo.");
+    } catch (fetchError) {
+      // Distinguish timeout (AbortController) from network errors
+      const isTimeout = fetchError instanceof DOMException && fetchError.name === "TimeoutError";
+      setError(
+        isTimeout
+          ? "La peticion tardo demasiado. La imagen puede ser muy grande o el modelo esta lento. Intenta de nuevo."
+          : "Error de conexion. Verifica tu red e intenta de nuevo."
+      );
     } finally {
       setLoading(false);
     }
