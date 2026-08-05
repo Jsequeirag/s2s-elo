@@ -192,24 +192,33 @@ export default function ImageTab({
       reader.onload = () => {
         const originalDataUrl = reader.result as string;
 
-        // Re-encode as JPEG at quality 0.9 to reduce file size WITHOUT
-        // resizing (preserves full resolution for text legibility).
+        // Resize/compress large images (especially phone photos) to avoid
+        // Vercel body limits and OpenRouter size rejections.
         const img = new Image();
         img.onload = () => {
+          const MAX_DIM = 1600; // max width/height in pixels
+          const QUALITY = 0.8; // JPEG quality
+
+          let { width, height } = img;
+          if (width > MAX_DIM || height > MAX_DIM) {
+            const scale = Math.min(MAX_DIM / width, MAX_DIM / height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+          }
+
           const canvas = document.createElement("canvas");
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
+          canvas.width = width;
+          canvas.height = height;
           const ctx = canvas.getContext("2d");
           if (!ctx) {
             setImageDataUrl(originalDataUrl);
             setImagePreview(originalDataUrl);
             return;
           }
-          ctx.drawImage(img, 0, 0);
+          ctx.drawImage(img, 0, 0, width, height);
 
-          const compressed = canvas.toDataURL("image/jpeg", 0.9);
+          const compressed = canvas.toDataURL("image/jpeg", QUALITY);
 
-          // Only use compressed if it's actually smaller
           if (compressed.length < originalDataUrl.length) {
             setImageDataUrl(compressed);
             setImagePreview(compressed);
