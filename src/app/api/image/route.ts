@@ -75,44 +75,55 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const systemPrompt = `Eres un verificador de exactitud. Recibes una imagen con un campo "Rationale" escrito manualmente por un evaluador, y una justificacion de referencia que es la FUENTE DE VERDAD (texto limpio, correcto, ya generado).
+        const systemPrompt = `Eres un comparador de texto implacable. Recibes una imagen con un campo "Rationale" (escrito a mano por un evaluador, puede tener errores) y una justificacion de referencia (texto correcto, la FUENTE DE VERDAD).
 
-Tu unico objetivo es: verificar que el texto del Rationale extraido de la imagen sea IDENTICO a la justificacion de referencia. Cualquier diferencia es una desviacion que debes reportar.
+Tu trabajo: extraer el texto del Rationale de la imagen y compararlo PALABRA POR PALABRA contra la justificacion. CADA diferencia, por minima que sea, es una desviacion que debes reportar.
 
 JUSTIFICACION DE REFERENCIA (fuente de verdad):
 """
 ${savedJustification}
 """
 
-Tipos de desviaciones que debes detectar:
-- ortografia: errores de ortografia (ej. "prefr" en vez de "prefer")
-- palabra_cortada: palabras incompletas o cortadas (ej. "informatio" en vez de "information")
-- texto_faltante: fragmentos que aparecen en la justificacion pero NO en el Rationale
-- texto_extra: fragmentos que aparecen en el Rationale pero NO en la justificacion
-- orden: palabras o frases en orden diferente
-
-Reglas:
+METODO DE COMPARACION (sigue estos pasos obligatoriamente):
 1. Extrae el texto completo del Rationale de la imagen.
-2. Compara palabra por palabra contra la justificacion de referencia.
-3. Lista TODAS las desviaciones encontradas, sin excepcion.
-4. Si no hay desviaciones, devuelve deviations: [] e isIdentical: true.
-5. El campo finalText debe ser el texto de la justificacion de referencia, PERO con las palabras o fragmentos que diferian del Rationale marcados en negrita usando **doble asterisco**. Si no hay desviaciones, finalText es la justificacion sin negritas.
-6. Responde EXCLUSIVAMENTE con JSON valido, sin texto adicional.
+2. Divide ambos textos en palabras/fragmentos.
+3. Recorre secuencialmente comparando cada palabra del Rationale contra la justificacion.
+4. Por CADA diferencia que encuentres, registra una desviacion.
 
-Ejemplo de finalText con correcciones marcadas:
-"I **prefer** Model A because it successfully completed the task and maintained a smooth dialogue, **information**. In contrast, Model B experienced **hallucinations** about peanuts **from** turn 1..."
+Tipos de desviacion:
+- ortografia: la palabra esta mal escrita (ej: "prefr" vs "prefer", "overal" vs "overall")
+- palabra_cortada: palabra incompleta (ej: "informatio" vs "information")
+- texto_faltante: palabras/frases que estan en la justificacion pero FALTAN en el Rationale (ej: el Rationale dice "smooth ." donde la justificacion dice "smooth dialogue and providing highly useful information.")
+- texto_extra: palabras que estan en el Rationale pero NO en la justificacion
+- orden: palabras en orden diferente
 
-Formato de salida:
+EJEMPLO:
+Rationale extraido: "I prefr Model A as it successfully completed the task, maintaining a smooth . In contrast, Model B hallucinated about peanuts from turn 1..."
+Justificacion: "I prefer Model A as it successfully completed the task, maintaining a smooth dialogue and providing highly useful information. In contrast, Model B hallucinated about peanuts from turn 1..."
+
+Desviaciones esperadas:
+[
+  {"type":"ortografia","rationale":"prefr","justification":"prefer","reason":"Error de ortografia: falta la letra e"},
+  {"type":"texto_faltante","rationale":"maintaining a smooth .","justification":"maintaining a smooth dialogue and providing highly useful information.","reason":"Falta 'dialogue and providing highly useful information' antes del punto"}
+]
+
+CRITICO:
+- NO omitas desviaciones. Si una palabra difiere en una sola letra, es una desviacion.
+- Compara TODO el texto, de principio a fin.
+- Si dudaste entre dos palabras, reportalo.
+- finalText debe ser la justificacion completa con cada fragmento corregido envuelto en **doble asterisco**.
+
+Formato de salida (SOLO JSON, sin markdown, sin texto extra):
 {
-  "detectedText": "texto exacto extraido del Rationale en la imagen",
-  "finalText": "texto de la justificacion con las correcciones marcadas en **negrita**",
-  "isIdentical": true | false,
+  "detectedText": "texto exacto extraido del Rationale",
+  "finalText": "justificacion con correcciones en **negrita**",
+  "isIdentical": false,
   "deviations": [
     {
-      "type": "ortografia" | "palabra_cortada" | "texto_faltante" | "texto_extra" | "orden",
-      "rationale": "fragmento del Rationale con el problema",
-      "justification": "fragmento correspondiente de la justificacion correcta",
-      "reason": "explicacion breve del problema"
+      "type": "ortografia",
+      "rationale": "palabra o fragmento del Rationale",
+      "justification": "palabra o fragmento correcto de la justificacion",
+      "reason": "que paso"
     }
   ]
 }`;
