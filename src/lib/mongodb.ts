@@ -36,6 +36,8 @@ export interface JustificationDocument extends Document {
   analysis: Record<string, unknown>;
   imageAnalysis?: Record<string, unknown>;
   dialogue?: Record<string, unknown>;
+  qaState?: Record<string, unknown>;
+  generalQaState?: Record<string, unknown>;
   taskSpec?: TaskSpec;
   updatedAt: string;
 }
@@ -174,6 +176,84 @@ export async function clearDialogue(): Promise<void> {
 }
 
 /**
+ * Updates only the qaState field (last question/answer for the Consultar tab).
+ * No-ops if there is no document yet.
+ */
+export async function saveQaState(
+  qaState: Record<string, unknown>
+): Promise<void> {
+  const client = await getClient();
+  const db = client.db(DB_NAME);
+
+  const result = await db
+    .collection<JustificationDocument>(COLLECTION)
+    .updateOne(
+      {},
+      { $set: { qaState, updatedAt: new Date().toISOString() } }
+    );
+
+  if (result.matchedCount === 0) {
+    await db.collection<JustificationDocument>(COLLECTION).insertOne({
+      justification: "",
+      analysis: {},
+      qaState,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+}
+
+/**
+ * Clears the qaState field of the current scenario document.
+ */
+export async function clearQaState(): Promise<void> {
+  const client = await getClient();
+  const db = client.db(DB_NAME);
+
+  await db
+    .collection<JustificationDocument>(COLLECTION)
+    .updateOne({}, { $unset: { qaState: "" }, $set: { updatedAt: new Date().toISOString() } });
+}
+
+/**
+ * Updates only the generalQaState field (last question/answer for the General tab).
+ * No-ops if there is no document yet.
+ */
+export async function saveGeneralQaState(
+  generalQaState: Record<string, unknown>
+): Promise<void> {
+  const client = await getClient();
+  const db = client.db(DB_NAME);
+
+  const result = await db
+    .collection<JustificationDocument>(COLLECTION)
+    .updateOne(
+      {},
+      { $set: { generalQaState, updatedAt: new Date().toISOString() } }
+    );
+
+  if (result.matchedCount === 0) {
+    await db.collection<JustificationDocument>(COLLECTION).insertOne({
+      justification: "",
+      analysis: {},
+      generalQaState,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+}
+
+/**
+ * Clears the generalQaState field of the current scenario document.
+ */
+export async function clearGeneralQaState(): Promise<void> {
+  const client = await getClient();
+  const db = client.db(DB_NAME);
+
+  await db
+    .collection<JustificationDocument>(COLLECTION)
+    .updateOne({}, { $unset: { generalQaState: "" }, $set: { updatedAt: new Date().toISOString() } });
+}
+
+/**
  * Saves the task specification (SCENARIO + WHAT TO DO + Skills Tested)
  * extracted from the dialogue generation image. Replaces any previous
  * taskSpec — only one active task spec exists at a time.
@@ -270,7 +350,7 @@ export interface ConfigDocument extends Document {
   updatedAt: string;
 }
 
-const MODEL_KEYS = ["qaModel", "imageModel", "analyzeModel", "dialogModel"] as const;
+const MODEL_KEYS = ["qaModel", "imageModel", "analyzeModel", "dialogModel", "generalModel"] as const;
 
 /**
  * Returns all saved model config values, using defaults for missing keys.
@@ -280,6 +360,7 @@ export async function getModelConfig(): Promise<{
   imageModel: string;
   analyzeModel: string;
   dialogModel: string;
+  generalModel: string;
 }> {
   const client = await getClient();
   const db = client.db(DB_NAME);
@@ -294,6 +375,7 @@ export async function getModelConfig(): Promise<{
     imageModel: map.get("imageModel") || "openai/gpt-4o-mini",
     analyzeModel: map.get("analyzeModel") || "openai/gpt-4o-mini",
     dialogModel: map.get("dialogModel") || "openai/gpt-4o-mini",
+    generalModel: map.get("generalModel") || "openai/gpt-4o-mini",
   };
 }
 

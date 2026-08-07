@@ -218,12 +218,22 @@ export default function DialogTab({
     setTimeout(() => setCopiedAll(false), 1500);
   }, [result]);
 
-  const handleReset = useCallback(() => {
+  const handleReset = useCallback(async () => {
     setImagePreview(null);
     setImageDataUrl(null);
     setResult(null);
     setError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
+    // Clear persisted dialogue
+    try {
+      await fetch("/api/justification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clearDialogue: true }),
+      });
+    } catch {
+      // Best-effort
+    }
   }, []);
 
   const scenarioInfo = result

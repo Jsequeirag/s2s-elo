@@ -14,60 +14,53 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Loader2,
   Send,
-  HelpCircle,
+  Sparkles,
   AlertCircle,
-  Lightbulb,
+  RotateCcw,
 } from "lucide-react";
 
-const EXAMPLE_QUESTIONS = [
-  "Si el audio se corto al final de un turno, afecta naturalness o dynamics?",
-  "Cuando debo marcar Tech Issues?",
-  "Cuando es correcto usar Tie en audio quality?",
-  "Que hago si el modelo sono falso pero completo la tarea?",
-  "Cual es la diferencia entre Task Success fail y Naturalness?",
-  "Como manejo los clics menores en la justificacion?",
+const GENERAL_MODEL_PROFILES = [
+  { label: "Economico", value: "openai/gpt-4o-mini" },
+  { label: "Mas fuerte", value: "openai/gpt-4o" },
 ];
 
-const QA_MODEL_PROFILES = [
-  { label: "QA económico", value: "openai/gpt-4o-mini" },
-  { label: "Más fuerte", value: "openai/gpt-4o" },
-];
+type CallMeta = {
+  model: string;
+  requestedAt: string;
+  usage: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    cost: number;
+  };
+} | null;
 
-export default function ConsultTab({
-  qaModel,
-  onQaModelChange,
+export default function GeneralQaTab({
+  generalModel,
+  onGeneralModelChange,
 }: {
-  qaModel: string;
-  onQaModelChange: (value: string) => void;
+  generalModel: string;
+  onGeneralModelChange: (value: string) => void;
 }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
-  const [lastCallMeta, setLastCallMeta] = useState<{
-    model: string;
-    requestedAt: string;
-    usage: {
-      promptTokens: number;
-      completionTokens: number;
-      totalTokens: number;
-      cost: number;
-    };
-  } | null>(null);
+  const [lastCallMeta, setLastCallMeta] = useState<CallMeta>(null);
 
-  // Load saved QA state on mount
+  // Load saved general QA state on mount
   useEffect(() => {
     if (loaded) return;
     (async () => {
       try {
         const res = await fetch("/api/justification");
         const json = await res.json();
-        if (res.ok && json.data?.qaState) {
-          const saved = json.data.qaState as {
+        if (res.ok && json.data?.generalQaState) {
+          const saved = json.data.generalQaState as {
             question: string;
             answer: string;
-            lastCallMeta: typeof lastCallMeta;
+            lastCallMeta: CallMeta;
           };
           if (typeof saved.question === "string") setQuestion(saved.question);
           if (typeof saved.answer === "string") setAnswer(saved.answer);
@@ -81,15 +74,15 @@ export default function ConsultTab({
     })();
   }, [loaded]);
 
-  // Persist QA state (question + answer + metadata) to MongoDB
-  const persistQaState = useCallback(
-    async (q: string, a: string, meta: typeof lastCallMeta) => {
+  // Persist general QA state to MongoDB
+  const persistState = useCallback(
+    async (q: string, a: string, meta: CallMeta) => {
       try {
         await fetch("/api/justification", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            qaState: { question: q, answer: a, lastCallMeta: meta },
+            generalQaState: { question: q, answer: a, lastCallMeta: meta },
           }),
         });
       } catch {
@@ -102,8 +95,8 @@ export default function ConsultTab({
   const handleAsk = useCallback(
     async (q?: string) => {
       const query = (q ?? question).trim();
-      if (query.length < 5) {
-        setError("La pregunta debe tener al menos 5 caracteres.");
+      if (query.length < 2) {
+        setError("La pregunta debe tener al menos 2 caracteres.");
         return;
       }
       setError("");
@@ -111,10 +104,10 @@ export default function ConsultTab({
       setAnswer("");
 
       try {
-        const res = await fetch("/api/qa", {
+        const res = await fetch("/api/general-qa", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: query, model: qaModel }),
+          body: JSON.stringify({ question: query, model: generalModel }),
         });
         const data = await res.json();
 
@@ -131,23 +124,38 @@ export default function ConsultTab({
         }
 
         const nextAnswer = data.answer || "";
-        const nextMeta = {
-          model: data.model || qaModel,
+        const nextMeta: CallMeta = {
+          model: data.model || generalModel,
           requestedAt: data.requestedAt || new Date().toISOString(),
           usage: data.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0, cost: 0 },
         };
         setAnswer(nextAnswer);
         setLastCallMeta(nextMeta);
-        persistQaState(query, nextAnswer, nextMeta);
+        persistState(query, nextAnswer, nextMeta);
       } catch {
         setError("Error de conexion. Verifica tu red e intenta de nuevo.");
       } finally {
         setLoading(false);
       }
     },
-    [question, qaModel, persistQaState]
+    [question, generalModel, persistState]
   );
 
+  const handleReset = useCallback(async () => {
+    setQuestion("");
+    setAnswer("");
+    setError("");
+    setLastCallMeta(null);
+    try {
+      await fetch("/api/justification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clearGeneralQa: true }),
+      });
+    } catch {
+      // Best-effort
+    }
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -155,29 +163,29 @@ export default function ConsultTab({
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            <HelpCircle className="size-5 text-primary" />
-            Consulta sobre la Guia
+            <Sparkles className="size-5 text-primary" />
+            Consulta General
           </CardTitle>
           <CardDescription>
-            Pregunta cualquier duda sobre como evaluar, que dimension usar o
-            como aplicar las reglas. La respuesta se basa en la Instruction y
-            Guia oficiales.
+            Pregunta lo que necesites sobre cualquier tema. Las respuestas son
+            claras y breves por defecto.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Model selector */}
           <div className="rounded-lg border bg-muted/30 p-3">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Modelo de consulta
+                Modelo
               </p>
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>Consulta</span>
                 <select
-                  value={qaModel}
-                  onChange={(e) => onQaModelChange(e.target.value)}
+                  value={generalModel}
+                  onChange={(e) => onGeneralModelChange(e.target.value)}
                   className="rounded-md border bg-background px-2 py-1 text-xs"
                 >
-                  {QA_MODEL_PROFILES.map((profile) => (
+                  {GENERAL_MODEL_PROFILES.map((profile) => (
                     <option key={profile.value} value={profile.value}>
                       {profile.label}
                     </option>
@@ -187,7 +195,7 @@ export default function ConsultTab({
             </div>
           </div>
           <Textarea
-            placeholder="Ej: Si el modelo se reinicio en el turno 3, debo marcar Tech Issues? Afecta la naturalidad?"
+            placeholder="Ej: Cual es la capital de Australia? · Resume que es la pileta de hilos en 2 frases."
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             className="min-h-[100px] text-sm leading-relaxed"
@@ -205,7 +213,7 @@ export default function ConsultTab({
             </p>
             <Button
               onClick={() => handleAsk()}
-              disabled={loading || question.trim().length < 5}
+              disabled={loading || question.trim().length < 2}
               className="gap-2"
             >
               {loading ? (
@@ -221,31 +229,6 @@ export default function ConsultTab({
               )}
             </Button>
           </div>
-
-          {/* Example questions */}
-          {!answer && !loading && !error && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Lightbulb className="size-3.5" />
-                Preguntas frecuentes
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {EXAMPLE_QUESTIONS.map((ex) => (
-                  <button
-                    key={ex}
-                    type="button"
-                    onClick={() => {
-                      setQuestion(ex);
-                      handleAsk(ex);
-                    }}
-                    className="text-xs text-left px-3 py-1.5 rounded-lg border bg-muted/40 hover:bg-muted/70 transition-colors"
-                  >
-                    {ex}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {error && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm whitespace-pre-wrap break-words">
@@ -266,8 +249,6 @@ export default function ConsultTab({
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-11/12" />
             <Skeleton className="h-4 w-4/5" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
           </CardContent>
         </Card>
       )}
@@ -276,10 +257,21 @@ export default function ConsultTab({
       {answer && !loading && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <HelpCircle className="size-5 text-emerald-500" />
-              Respuesta
-            </CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Sparkles className="size-5 text-emerald-500" />
+                Respuesta
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleReset}
+                className="gap-1.5 text-xs text-muted-foreground"
+              >
+                <RotateCcw className="size-3.5" />
+                Limpiar
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="rounded-lg border bg-background overflow-hidden">
