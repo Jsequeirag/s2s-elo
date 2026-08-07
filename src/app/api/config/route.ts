@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getModelConfig, saveModelConfig } from "@/lib/mongodb";
 
-const ALLOWED_KEYS = ["qaModel", "imageModel", "analyzeModel", "dialogModel"];
+const ALLOWED_KEYS = ["qaModel", "imageModel", "analyzeModel", "dialogModel", "generalModel"];
 
 export async function GET() {
   try {

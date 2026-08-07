@@ -9,6 +9,7 @@ import {
   ImageIcon,
   FileText,
   MessageSquare,
+  Sparkles,
 } from "lucide-react";
 import EvaluatorTab from "@/components/evaluator-tab";
 import ConsultTab from "@/components/consult-tab";
@@ -16,8 +17,9 @@ import ImageTab from "@/components/image-tab";
 import ModelConfigTab from "@/components/model-config-tab";
 import DocumentsTab from "@/components/documents-tab";
 import DialogTab from "@/components/dialog-tab";
+import GeneralQaTab from "@/components/general-qa-tab";
 
-type TabId = "transcribir" | "consultar" | "imagen" | "dialogo" | "modelos" | "documentos";
+type TabId = "transcribir" | "consultar" | "imagen" | "dialogo" | "generales" | "modelos" | "documentos";
 
 const DEFAULT_MODEL = "openai/gpt-4o-mini";
 
@@ -43,12 +45,14 @@ export default function Home() {
   const [imageModel, setImageModel] = useState(DEFAULT_MODEL);
   const [analyzeModel, setAnalyzeModel] = useState(DEFAULT_MODEL);
   const [dialogModel, setDialogModel] = useState(DEFAULT_MODEL);
+  const [generalModel, setGeneralModel] = useState(DEFAULT_MODEL);
   const [configLoaded, setConfigLoaded] = useState(false);
 
   const persistQa = useModelPersist("qaModel");
   const persistImage = useModelPersist("imageModel");
   const persistAnalyze = useModelPersist("analyzeModel");
   const persistDialog = useModelPersist("dialogModel");
+  const persistGeneral = useModelPersist("generalModel");
 
   // Load saved model config from MongoDB on mount
   useEffect(() => {
@@ -62,6 +66,7 @@ export default function Home() {
           if (json.data.imageModel) setImageModel(json.data.imageModel);
           if (json.data.analyzeModel) setAnalyzeModel(json.data.analyzeModel);
           if (json.data.dialogModel) setDialogModel(json.data.dialogModel);
+          if (json.data.generalModel) setGeneralModel(json.data.generalModel);
         }
       } catch {
         // Silently fail — use defaults
@@ -91,11 +96,17 @@ export default function Home() {
     persistDialog(value);
   }, [persistDialog]);
 
+  const handleGeneralModelChange = useCallback((value: string) => {
+    setGeneralModel(value);
+    persistGeneral(value);
+  }, [persistGeneral]);
+
   const tabs: { id: TabId; label: string; icon: typeof PenLine }[] = [
     { id: "transcribir", label: "Transcribir", icon: PenLine },
     { id: "consultar", label: "Consultar", icon: MessageCircleQuestion },
     { id: "imagen", label: "Imagen", icon: ImageIcon },
     { id: "dialogo", label: "Dialogo", icon: MessageSquare },
+    { id: "generales", label: "General", icon: Sparkles },
     { id: "modelos", label: "Modelos", icon: Settings2 },
     { id: "documentos", label: "Documentos", icon: FileText },
   ];
@@ -164,14 +175,22 @@ export default function Home() {
             onDialogModelChange={handleDialogModelChange}
           />
         </div>
+        <div className={activeTab === "generales" ? "" : "hidden"}>
+          <GeneralQaTab
+            generalModel={generalModel}
+            onGeneralModelChange={handleGeneralModelChange}
+          />
+        </div>
         <div className={activeTab === "modelos" ? "" : "hidden"}>
           <ModelConfigTab
             qaModel={qaModel}
             imageModel={imageModel}
             analyzeModel={analyzeModel}
+            generalModel={generalModel}
             onQaModelChange={handleQaModelChange}
             onImageModelChange={handleImageModelChange}
             onAnalyzeModelChange={handleAnalyzeModelChange}
+            onGeneralModelChange={handleGeneralModelChange}
           />
         </div>
         <div className={activeTab === "documentos" ? "" : "hidden"}>
