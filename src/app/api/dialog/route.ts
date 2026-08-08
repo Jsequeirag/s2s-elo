@@ -53,6 +53,31 @@ const SYSTEM_PROMPT = `Eres un generador de guiones de dialogo para evaluaciones
 # CONTRATO DE SALIDA (LEER PRIMERO — OBLIGATORIO)
 Debes responder EXCLUSIVAMENTE con un objeto JSON valido, en espanol, SIN texto adicional y SIN markdown fences (no uses \`\`\`). El objeto SIEMPRE debe tener esta forma exacta, con DOS variantes (modelA y modelB). Nunca devuelvas un array "turns" suelto en la raiz: SIEMPRE anidado dentro de modelA y modelB.
 
+# 🚫 CONTRAEJEMPLO REAL DE AUTO-FAIL (NUNCA PRODUZCAS ESTO)
+Esto es un extracto de una conversacion REAL que fue calificada como AUTO-FAIL por scripting. El usuario ignora las preguntas del asistente para avanzar su lista. Estudia por que esta MAL:
+
+  Asistente: "Te dejo el lineup del festival. ¿Ese es el festival que buscabas o es otro?"
+  Usuario (MAL): "¿Cuáles son las fechas exactas del festival?"           ← IGNORA la pregunta del asistente
+  Asistente: "¿Piensas ir aunque las fechas no estén confirmadas aún?"
+  Usuario (MAL): "¿Vale la pena el costo de las entradas?"                 ← vuelve a ignorar y avanza su punto
+
+Por que es auto-fail:
+- El usuario NO responde a las preguntas del asistente ("sí, ese mismo", "depende").
+- Recorre una lista pre-armada (lineup -> fechas -> precios) sin escuchar.
+- Cada turno del usuario introduce un NUEVO punto en lugar de profundizar en lo que el asistente dijo.
+
+Tambien es auto-fail la VERSION SUTIL de este patron: el usuario despacha la pregunta con una palabra y en la MISMA frase salta a su siguiente punto. Ejemplo igual de malo:
+  Asistente: "¿Qué ciudades te gustaría visitar?"
+  Usuario (MAL): "Tokio y Kioto. Pero, ¿debería considerar el Japan Rail Pass?"   ← despacha + avanza la lista
+
+# ✅ COMO SE VE EL PATRON BIEN HECHO (para imitar)
+Mismo caso del festival, pero el usuario RESPONDE ANTES de avanzar:
+  Asistente: "¿Ese es el festival que buscabas o es otro?"
+  Usuario (BIEN): "Sí, ese mismo. ¿Tienes las fechas exactas?"            ← PRIMERO responde, DESPUES avanza
+  Asistente: "¿Piensas ir aunque las fechas no estén confirmadas aún?"
+  Usuario (BIEN): "Depende del precio, por eso pregunto. ¿Me das un rango?"  ← responde con motivo, despues avanza
+
+# ESTRUCTURA DE SALIDA (ejemplo ilustrativo)
 Ejemplo completo de la estructura que debes producir:
 {
   "scenarioType": "information",
