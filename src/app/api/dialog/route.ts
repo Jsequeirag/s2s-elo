@@ -18,7 +18,13 @@ interface DialogRequest {
 
 interface DialogTurn {
   number: number;
+  speaker?: string;
   text: string;
+}
+
+interface DialogVariant {
+  label: string;
+  turns: DialogTurn[];
 }
 
 interface DialogResponse {
@@ -27,7 +33,11 @@ interface DialogResponse {
   scenarioDescription?: string;
   userRole?: string;
   skillsTested?: string[];
-  turns: DialogTurn[];
+  // Dual A/B output. Legacy `turns` (single dialogue) is still accepted for
+  // backward compatibility with previously persisted documents.
+  modelA?: DialogVariant;
+  modelB?: DialogVariant;
+  turns?: DialogTurn[];
   usage: {
     promptTokens: number;
     completionTokens: number;
@@ -38,7 +48,7 @@ interface DialogResponse {
   requestedAt: string;
 }
 
-const SYSTEM_PROMPT = `Eres un generador de guiones de dialogo para evaluaciones S2S (Speech-to-Speech) en vivo. Recibes la captura de pantalla de un escenario de la plataforma S2S Arena y debes generar un guion de dialogo realista en espanol.
+const SYSTEM_PROMPT = `Eres un generador de guiones de dialogo para evaluaciones S2S (Speech-to-Speech) en vivo. Recibes la captura de pantalla de un escenario de la plataforma S2S Arena y debes generar DOS versiones distintas del mismo dialogo (modelA y modelB), en espanol, realistas y reactivas.
 
 ## Estructura tipica de la imagen
 La captura suele contener:
@@ -66,36 +76,57 @@ Clasifica el escenario en uno de estos tipos (elige el dominante si mezcla vario
 - emergency: Situaciones urgentes, alertas, servicios de emergencia
 - creative: Planificacion de eventos, colaboraciones, lluvia de ideas
 
-## Paso 3 — Generacion del guion
-Genera un dialogo de 3 a 6 turnos alternando entre usuario y asistente. Cada turno debe:
-- Ser una unica intervencion (no multiples oraciones por persona)
-- Tener maximo 60 palabras
-- Usar variedad gramatical: preguntas, afirmaciones, exclamaciones, negaciones — como un hablante natural
-- Ser realista y coloquial sin ser informal en exceso
-- Avanzar la conversacion hacia resolucion del escenario
-- Reflejar las restricciones y contexto del "WHAT TO DO"
-- Ejercitar activamente las habilidades listadas en "SKILLS TESTED" cuando existan
+## Paso 3 — Generacion de DOS versiones (modelA y modelB)
+Genera DOS dialogos independientes del MISMO escenario. Ambos deben:
+- Tener entre 3 y 6 turnos alternando usuario y asistente.
+- Compartir el mismo objetivo, energia, temas y profundidad (consistencia 1:1 para una comparacion justa).
+- Diferir en FRASEO y en el ORDEN en que se abordan los puntos (no deben ser parrafos equivalentes con sinonimos; deben sonar como dos conversaciones distintas entre dos personas distintas).
+- Cada turno: maximo 60 palabras, una unica intervencion (no multiples oraciones por persona).
+- Usar variedad gramatical: preguntas, afirmaciones, exclamaciones, negaciones — como un hablante natural.
+- Ser realistas y coloquiales sin ser informales en exceso.
+- Reflejar las restricciones y contexto del "WHAT TO DO".
+- Ejercitar activamente las habilidades listadas en "SKILLS TESTED" cuando existan.
+- Respeta el "User Role" indicado: si el usuario es "Customer", los turnos de usuario deben reflejar ese rol.
+- Si el escenario implica numeros, fechas o datos especificos, inventalos coherentemente (y pueden diferir entre modelA y modelB).
 
-Reglas de generacion:
-1. El primer turno siempre es del usuario planteando el escenario.
+### REGLAS ANTI-SCRIPTING (OBLIGATORIAS — su violacion invalida el guion)
+Estas reglas existen porque un anotador que sigue un guion preescrito e ignora al modelo causa AUTO-FAIL en la evaluacion. Prevenirlas es tu prioridad #1:
+
+1. **REACTIVIDAD:** En cada turno del usuario, el usuario DEBE responder o reconocer lo que el asistente dijo en su turno anterior antes de avanzar. Esta PROHIBIDO que el usuario ignore una pregunta directa del asistente y continue con su siguiente punto planificado.
+   - Mal: Asistente pregunta "¿Ese es el festival que buscabas?" -> Usuario responde "¿Cuáles son las fechas?" (ignora la pregunta).
+   - Bien: Asistente pregunta "¿Ese es el festival que buscabas?" -> Usuario responde "Sí, ese mismo. ¿Tienes las fechas exactas?".
+2. **NO SOBRE PLANIFICAR:** El usuario no debe parecer que lleva una lista de preguntas pre-hechas. Debe reaccionar de forma espontanea a lo que escucha.
+3. **VARIACION ENTRE VERSIONES:** modelA y modelB no deben repetir las mismas preguntas en el mismo orden. Una puede arrancar preguntando por precios, la otra por fechas, por ejemplo, pero ambas cubren los mismos temas clave.
+4. **ADAPTABILIDAD:** En al menos UNA de las dos versiones, el usuario debe mostrar un cambio de opinion, una interrupcion, una duda genuina o una redireccion a mitad de conversacion (ej. "o espera, pensandolo bien prefiero algo mas tranquilo", "antes de seguir con eso, ¿incluye artistas locales?", "¿y si llueve?").
+5. **CIERRE NATURAL:** No todas las conversaciones deben llegar a resolucion completa. Un final abierto o una promesa de "lo pienso y te confirmo" es aceptable y a menudo mas realista.
+
+Reglas de generacion adicionales:
+1. El primer turno de cada version siempre es del usuario planteando el escenario.
 2. Los turnos deben fluir de forma natural como una conversacion telefonica o por voz.
-3. El asistente debe sonar empatico y profesional.
-4. El dialogo debe llegar a un punto de resolucion o cierre natural.
-5. Si el escenario implica numeros, fechas o datos especificos, inventalos coherentemente.
-6. Respeta el "User Role" indicado: si el usuario es "Customer", los turnos de usuario deben reflejar ese rol.
+3. El asistente debe sonar empatico y profesional, pero con un estilo ligeramente distinto entre modelA y modelB (uno puede ser mas directo, el otro mas conversacional, por ejemplo).
 
 ## Formato de salida
-Responde EXCLUSIVAMENTE con JSON valido, en espanol, sin texto adicional:
+Responde EXCLUSIVAMENTE con JSON valido, en espanol, sin texto adicional ni markdown fences:
 {
   "scenarioType": "tipo_clasificado",
   "scenario": "VALOR DEL CAMPO SCENARIO extraido tal cual de la imagen, o vacio si no aparece",
   "scenarioDescription": "descripcion breve del WHAT TO DO extraido",
   "userRole": "rol del usuario si aparece, o vacio",
   "skillsTested": ["habilidad 1", "habilidad 2"],
-  "turns": [
-    { "number": 1, "speaker": "usuario", "text": "turno del usuario" },
-    { "number": 2, "speaker": "asistente", "text": "turno del asistente" }
-  ]
+  "modelA": {
+    "label": "Model A",
+    "turns": [
+      { "number": 1, "speaker": "usuario", "text": "turno del usuario" },
+      { "number": 2, "speaker": "asistente", "text": "turno del asistente" }
+    ]
+  },
+  "modelB": {
+    "label": "Model B",
+    "turns": [
+      { "number": 1, "speaker": "usuario", "text": "turno del usuario" },
+      { "number": 2, "speaker": "asistente", "text": "turno del asistente" }
+    ]
+  }
 }`;
 
 export async function POST(req: NextRequest) {
@@ -133,7 +164,7 @@ export async function POST(req: NextRequest) {
         SYSTEM_PROMPT,
         userPrompt,
         0.7,
-        8000,
+        10000,
         resolveModelForTask("dialog", requestedModel),
         [
           {
@@ -169,6 +200,8 @@ export async function POST(req: NextRequest) {
         scenarioDescription?: string;
         userRole?: string;
         skillsTested?: string[];
+        modelA?: DialogVariant;
+        modelB?: DialogVariant;
         turns?: DialogTurn[];
       } = {};
 
@@ -180,7 +213,7 @@ export async function POST(req: NextRequest) {
           .trim();
         parsed = JSON.parse(cleaned);
       } catch {
-        // If parse fails, wrap the entire response as a single turn
+        // If parse fails, wrap the entire response as a single legacy turn
         parsed = {
           scenarioType: "desconocido",
           scenarioDescription: "No se pudo clasificar",
@@ -194,7 +227,11 @@ export async function POST(req: NextRequest) {
         scenarioDescription: parsed.scenarioDescription,
         userRole: parsed.userRole,
         skillsTested: parsed.skillsTested,
-        turns: parsed.turns || [{ number: 1, text: content.trim() }],
+        // Dual A/B variants when present; legacy `turns` is kept for backward
+        // compatibility with older documents and parse-fallback responses.
+        modelA: parsed.modelA,
+        modelB: parsed.modelB,
+        turns: parsed.turns,
         usage: extractUsage(result.data),
         model:
           result.model || resolveModelForTask("dialog", requestedModel),

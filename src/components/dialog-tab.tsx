@@ -28,13 +28,22 @@ interface DialogTurn {
   text: string;
 }
 
+interface DialogVariant {
+  label?: string;
+  turns: DialogTurn[];
+}
+
 interface DialogResult {
   scenarioType: string;
   scenario?: string;
   scenarioDescription?: string;
   userRole?: string;
   skillsTested?: string[];
-  turns: DialogTurn[];
+  // Dual A/B variants (new format). Legacy single-dialogue docs expose
+  // `turns` directly — the renderer falls back to that when A/B are absent.
+  modelA?: DialogVariant;
+  modelB?: DialogVariant;
+  turns?: DialogTurn[];
   usage: {
     promptTokens: number;
     completionTokens: number;
@@ -199,20 +208,53 @@ export default function DialogTab({
     }
   }, [imageDataUrl, dialogModel, persist]);
 
-  const handleCopyTurn = useCallback(async (turnIndex: number) => {
-    if (!result) return;
-    const turn = result.turns[turnIndex];
-    if (!turn) return;
-    await navigator.clipboard.writeText(turn.text);
-    setCopied(turnIndex);
-    setTimeout(() => setCopied(null), 1500);
-  }, [result]);
+  const handleCopyTurn = useCallback(
+    async (key: string, turnIndex: number) => {
+      const turns =
+        key === "A"
+          ? result?.modelA?.turns
+          : key === "B"
+            ? result?.modelB?.turns
+            : result?.turns;
+      const turn = turns?.[turnIndex];
+      if (!turn) return;
+      await navigator.clipboard.writeText(turn.text);
+      // Offset B's index so its "copied" state does not collide with A's.
+      setCopied(turnIndex + (key === "B" ? 1000 : 0));
+      setTimeout(() => setCopied(null), 1500);
+    },
+    [result]
+  );
 
   const handleCopyAll = useCallback(async () => {
     if (!result) return;
-    const fullText = result.turns
-      .map((t) => `[${t.speaker || "Turno"} ${t.number}] ${t.text}`)
-      .join("\n\n");
+    let fullText: string;
+    if (result.modelA || result.modelB) {
+      const blocks: string[] = [];
+      if (result.modelA) {
+        blocks.push(
+          `[${result.modelA.label || "Model A"}]\n` +
+            result.modelA.turns
+              .map((t) => `[${t.speaker || "Turno"} ${t.number}] ${t.text}`)
+              .join("\n")
+        );
+      }
+      if (result.modelB) {
+        blocks.push(
+          `[${result.modelB.label || "Model B"}]\n` +
+            result.modelB.turns
+              .map((t) => `[${t.speaker || "Turno"} ${t.number}] ${t.text}`)
+              .join("\n")
+        );
+      }
+      fullText = blocks.join("\n\n");
+    } else if (result.turns) {
+      fullText = result.turns
+        .map((t) => `[${t.speaker || "Turno"} ${t.number}] ${t.text}`)
+        .join("\n\n");
+    } else {
+      fullText = "";
+    }
     await navigator.clipboard.writeText(fullText);
     setCopiedAll(true);
     setTimeout(() => setCopiedAll(false), 1500);
@@ -397,7 +439,12 @@ export default function DialogTab({
                     </Badge>
                   )}
                   <span className="text-xs text-muted-foreground">
-                    {result.turns.length} turnos
+                    {(result.modelA?.turns.length ||
+                      result.modelB?.turns.length ||
+                      result.turns?.length ||
+                      0)}{" "}
+                    turnos
+                    {(result.modelA || result.modelB) && " por modelo"}
                   </span>
                 </div>
               )}
@@ -471,49 +518,123 @@ export default function DialogTab({
                 </Button>
               </div>
 
-              {/* Turn cards */}
-              <div className="space-y-3">
-                {result.turns.map((turn, idx) => (
-                  <div
-                    key={turn.number}
-                    className={`rounded-lg border p-4 ${
-                      turn.speaker === "usuario"
-                        ? "bg-blue-50/50 border-blue-200/60 dark:bg-blue-950/20 dark:border-blue-800/40"
-                        : "bg-emerald-50/50 border-emerald-200/60 dark:bg-emerald-950/20 dark:border-emerald-800/40"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                          {turn.speaker === "usuario" ? "Usuario" : "Asistente"}
-                        </span>
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                          {turn.number}
+              {/* Turn cards — dual A/B when available, legacy single list otherwise */}
+              {(() => {
+                const renderVariant = (variant: DialogVariant | undefined, key: string, accent: string) => {
+                  if (!variant?.turns?.length) return null;
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 pb-1">
+                        <Badge variant="outline" className={`text-[11px] ${accent}`}>
+                          {variant.label || `Model ${key}`}
                         </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {variant.turns.length} turnos
+                        </span>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleCopyTurn(idx)}
-                        className="gap-1 text-xs h-7 px-2"
-                      >
-                        {copied === idx ? (
-                          <>
-                            <Check className="size-3" />
-                            OK
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="size-3" />
-                            Copiar
-                          </>
-                        )}
-                      </Button>
+                      {variant.turns.map((turn, idx) => {
+                        const copiedKey = idx + (key === "B" ? 1000 : 0);
+                        return (
+                          <div
+                            key={`${key}-${turn.number}`}
+                            className={`rounded-lg border p-4 ${
+                              turn.speaker === "usuario"
+                                ? "bg-blue-50/50 border-blue-200/60 dark:bg-blue-950/20 dark:border-blue-800/40"
+                                : "bg-emerald-50/50 border-emerald-200/60 dark:bg-emerald-950/20 dark:border-emerald-800/40"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                                  {turn.speaker === "usuario" ? "Usuario" : "Asistente"}
+                                </span>
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                  {turn.number}
+                                </Badge>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleCopyTurn(key, idx)}
+                                className="gap-1 text-xs h-7 px-2"
+                              >
+                                {copied === copiedKey ? (
+                                  <>
+                                    <Check className="size-3" />
+                                    OK
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="size-3" />
+                                    Copiar
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                            <p className="text-sm leading-relaxed">{turn.text}</p>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <p className="text-sm leading-relaxed">{turn.text}</p>
+                  );
+                };
+
+                if (result.modelA || result.modelB) {
+                  return (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {renderVariant(result.modelA, "A", "text-blue-600 dark:text-blue-400")}
+                      {renderVariant(result.modelB, "B", "text-emerald-600 dark:text-emerald-400")}
+                    </div>
+                  );
+                }
+
+                // Legacy single-dialogue fallback
+                if (!result.turns?.length) return null;
+                return (
+                  <div className="space-y-3">
+                    {result.turns.map((turn, idx) => (
+                      <div
+                        key={turn.number}
+                        className={`rounded-lg border p-4 ${
+                          turn.speaker === "usuario"
+                            ? "bg-blue-50/50 border-blue-200/60 dark:bg-blue-950/20 dark:border-blue-800/40"
+                            : "bg-emerald-50/50 border-emerald-200/60 dark:bg-emerald-950/20 dark:border-emerald-800/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                              {turn.speaker === "usuario" ? "Usuario" : "Asistente"}
+                            </span>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                              {turn.number}
+                            </Badge>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCopyTurn("", idx)}
+                            className="gap-1 text-xs h-7 px-2"
+                          >
+                            {copied === idx ? (
+                              <>
+                                <Check className="size-3" />
+                                OK
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="size-3" />
+                                Copiar
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        <p className="text-sm leading-relaxed">{turn.text}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                );
+              })()}
 
               {/* Usage */}
               <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
