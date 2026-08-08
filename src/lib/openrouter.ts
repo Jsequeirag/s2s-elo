@@ -89,6 +89,34 @@ export async function callOpenRouter(
     );
   }
 
+  // Build the request body. Some optional flags are model-specific and must
+  // NOT be sent to models that do not support them (OpenRouter rejects them
+  // with HTTP 400). We add them conditionally based on the model id.
+  const body: Record<string, unknown> = {
+    model,
+    messages: messagesOverride ?? [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    temperature,
+    max_tokens: maxTokens,
+  };
+
+  // Disable "thinking" mode for Qwen 3.x models that support it. Otherwise
+  // the model spends all max_tokens on internal reasoning and returns
+  // content: null. Other providers (GLM, OpenAI, Anthropic...) reject this
+  // parameter, so it is scoped to Qwen only.
+  if (/qwen/i.test(model)) {
+    body.thinking = { type: "disabled" };
+  }
+
+  // Low reasoning effort for OpenAI reasoning models (o-series, Luna) so
+  // they reserve most tokens for the actual output instead of the internal
+  // chain-of-thought. Non-OpenAI reasoning models reject this parameter.
+  if (/^openai\/o\d/i.test(model) || /\/luna\b/i.test(model)) {
+    body.reasoning = { effort: "low" };
+  }
+
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -97,23 +125,7 @@ export async function callOpenRouter(
       "HTTP-Referer": "https://s2s-elo.vercel.app",
       "X-Title": "Live S2S ELO Evaluator",
     },
-    body: JSON.stringify({
-      model,
-      messages: messagesOverride ?? [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature,
-      max_tokens: maxTokens,
-      // Disable "thinking"/reasoning mode for models that support it (e.g.
-      // Qwen 3.x Plus/Max). Otherwise the model spends all max_tokens on
-      // internal reasoning and returns content: null.
-      thinking: { type: "disabled" },
-      // Low reasoning effort for OpenAI reasoning models (o-series, Luna)
-      // so they reserve most tokens for the actual output instead of the
-      // internal chain-of-thought.
-      reasoning: { effort: "low" },
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
