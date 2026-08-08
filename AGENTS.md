@@ -38,6 +38,7 @@ Run from the repository root:
 - [src/lib/instructions.ts](src/lib/instructions.ts) and [src/lib/guide.ts](src/lib/guide.ts) are the runtime source content used by the API endpoints; update those when the evaluation logic changes.
 - The analysis endpoint must continue returning strict JSON. Do not add prose or markdown fences to the output contract unless the route is intentionally changed.
 - When editing guidance or QA behavior, keep the responses grounded in the reference docs instead of inventing new evaluation rules.
+- [src/lib/anti-scripting.md](src/lib/anti-scripting.md) is an operational companion to `guide.md`: how to detect and avoid the "defensive scripting" auto-fail pattern. The dialog generator ([src/app/api/dialog/route.ts](src/app/api/dialog/route.ts)) encodes these rules in its prompt; update both together if the anti-scripting criteria change.
 
 ## Environment and deployment notes
 
