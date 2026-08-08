@@ -22,6 +22,10 @@ import GeneralQaTab from "@/components/general-qa-tab";
 type TabId = "transcribir" | "consultar" | "imagen" | "dialogo" | "generales" | "modelos" | "documentos";
 
 const DEFAULT_MODEL = "openai/gpt-4o-mini";
+// Justification/analysis uses a stronger reasoning model by default: the task
+// demands strict JSON + 4-part structure + evidence anchors, where mini models
+// struggle. GLM-4.6 (text-only) gives better adherence at a comparable price.
+const DEFAULT_ANALYZE_MODEL = "z-ai/glm-4.6";
 
 // Debounced persist to MongoDB — avoids saving on every keystroke
 function useModelPersist(key: string) {
@@ -40,10 +44,10 @@ function useModelPersist(key: string) {
 }
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<TabId>("transcribir");
+  const [activeTab, setActiveTab] = useState<TabId>("dialogo");
   const [qaModel, setQaModel] = useState(DEFAULT_MODEL);
   const [imageModel, setImageModel] = useState(DEFAULT_MODEL);
-  const [analyzeModel, setAnalyzeModel] = useState(DEFAULT_MODEL);
+  const [analyzeModel, setAnalyzeModel] = useState(DEFAULT_ANALYZE_MODEL);
   const [dialogModel, setDialogModel] = useState(DEFAULT_MODEL);
   const [generalModel, setGeneralModel] = useState(DEFAULT_MODEL);
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -102,10 +106,10 @@ export default function Home() {
   }, [persistGeneral]);
 
   const tabs: { id: TabId; label: string; icon: typeof PenLine }[] = [
-    { id: "transcribir", label: "Transcribir", icon: PenLine },
-    { id: "consultar", label: "Consultar", icon: MessageCircleQuestion },
-    { id: "imagen", label: "Imagen", icon: ImageIcon },
     { id: "dialogo", label: "Dialogo", icon: MessageSquare },
+    { id: "transcribir", label: "Transcribir", icon: PenLine },
+    { id: "imagen", label: "Imagen", icon: ImageIcon },
+    { id: "consultar", label: "Consultar", icon: MessageCircleQuestion },
     { id: "generales", label: "General", icon: Sparkles },
     { id: "modelos", label: "Modelos", icon: Settings2 },
     { id: "documentos", label: "Documentos", icon: FileText },
