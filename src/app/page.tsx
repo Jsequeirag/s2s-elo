@@ -186,10 +186,12 @@ export default function Home() {
             qaModel={qaModel}
             imageModel={imageModel}
             analyzeModel={analyzeModel}
+            dialogModel={dialogModel}
             generalModel={generalModel}
             onQaModelChange={handleQaModelChange}
             onImageModelChange={handleImageModelChange}
             onAnalyzeModelChange={handleAnalyzeModelChange}
+            onDialogModelChange={handleDialogModelChange}
             onGeneralModelChange={handleGeneralModelChange}
           />
         </div>

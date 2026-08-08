@@ -6,19 +6,23 @@ export default function ModelConfigTab({
     qaModel,
     imageModel,
     analyzeModel,
+    dialogModel,
     generalModel,
     onQaModelChange,
     onImageModelChange,
     onAnalyzeModelChange,
+    onDialogModelChange,
     onGeneralModelChange,
 }: {
     qaModel: string;
     imageModel: string;
     analyzeModel: string;
+    dialogModel: string;
     generalModel: string;
     onQaModelChange: (value: string) => void;
     onImageModelChange: (value: string) => void;
     onAnalyzeModelChange: (value: string) => void;
+    onDialogModelChange: (value: string) => void;
     onGeneralModelChange: (value: string) => void;
 }) {
     return (
@@ -64,9 +68,12 @@ export default function ModelConfigTab({
 
                     <div className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
                         <span className="font-medium">Dialogo</span>
-                        <p className="text-xs text-muted-foreground">
-                            Se configura desde el tab Dialogo.
-                        </p>
+                        <input
+                            value={dialogModel}
+                            onChange={(e) => onDialogModelChange(e.target.value)}
+                            className="w-full rounded-md border bg-background px-2 py-2 text-sm"
+                            placeholder="openai/gpt-4o-mini"
+                        />
                     </div>
 
                     <div className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
