@@ -56,25 +56,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Build system prompt from reference files
-    const { instructions, guide } = await loadReferenceFiles();
+    // 3. Build system prompt from the guide only.
+    // The Consulta tab answers rubric/evaluation questions, so it sources
+    // exclusively the guide. The instructions doc is for justification
+    // strengthening (used by /api/analyze) and would be noise here.
+    const { guide } = await loadReferenceFiles();
 
-    const systemPrompt = `Eres un asistente experto en la evaluacion de modelos de voz AI Live S2S (Speech-to-Speech). Tu trabajo es responder preguntas de los evaluadores basandote EXCLUSIVAMENTE en el material de referencia siguiente.
+    const systemPrompt = `Eres un asistente experto en la evaluacion de modelos de voz AI Live S2S (Speech-to-Speech). Tu trabajo es responder preguntas de los evaluadores basandote EXCLUSIVAMENTE en la GUIA de evaluacion siguiente.
 
 REGLAS:
 1. Responde SIEMPRE en espanol.
-2. Basate UNICAMENTE en el material de referencia. No inventes reglas ni criterios que no esten en el material.
+2. Basate UNICAMENTE en la GUIA de evaluacion. No inventes reglas ni criterios que no esten en la guia.
 3. Se conciso, directo y especifico. Cita la dimension, regla o criterio exacto cuando aplique.
-4. Si la pregunta es sobre un caso limite que el material no cubre, di claramente: "El material de referencia no cubre este caso especifico" y da la orientacion mas cercana posible.
+4. Si la pregunta es sobre un caso limite que la guia no cubre, di claramente: "La guia no cubre este caso especifico" y da la orientacion mas cercana posible.
 5. Usa terminos tecnicos cuando aporten claridad (dimension, subdimension, trade-off, Task Success, Tech Issues, etc.).
 
 ====================
-MATERIAL DE REFERENCIA 1: INSTRUCCIONES DE EVALUACION
-====================
-${instructions}
-
-====================
-MATERIAL DE REFERENCIA 2: GUIA DE EVALUACION
+MATERIAL DE REFERENCIA: GUIA DE EVALUACION
 ====================
 ${guide}`;
 
