@@ -65,11 +65,6 @@ Al final de tu respuesta, le darás al usuario un breve diagnóstico de por qué
 
 *Por qué es Excepcional:* Muestra el caso donde **Audio Quality sí decide** el voto (no siempre es Tie). Los "strong clicks that almost disturbed the voice" son artefactos mayores que justifican dar el punto a A. NOTA: los artefactos deben describirse con precisión ("almost disturbed the voice"), no con vaguedades.
 
-**Caso 6: Dropeo de Personaje en Turnos Finales + Tech Issues (Acento Norteño)**
-> "I prefer Model B since it consistently held both accents I requested (norteño and costeño) across all turns, using regional vocabulary like 'órale pues' naturally. Model A tried both accents but dropped the persona in the final turns, never sounding as natural; it also restarted mid-response once and paused noticeably before another answer. Both models stayed coherent, so utility was equal. Model B wins on naturalness and accent consistency." (432 caracteres)
-
-*Por qué es Excepcional:* Cubre dos lecciones a la vez: (1) **Dropeo de personaje en turnos finales** = Task Success **partial** (el modelo no sostuvo el rol). (2) "restarted mid-response once" y "paused noticeably" son **Tech Issues** que DEBEN marcarse (a diferencia del Caso 5, donde los clicks no justificaron marcar Tech Issues porque no se mencionaron como defectos del modelo). Demuestra consistencia de rol como dimensión de Naturalness.
-
 ### 🚫 Ejemplos Inaceptables (Referencias de Errores Fatales)
 
 **Caso 1: Contradicción en Audio Quality y Errores de Tipeo**
@@ -86,3 +81,8 @@ Al final de tu respuesta, le darás al usuario un breve diagnóstico de por qué
 > "I prefer Model B. Model A let out an 'uff' that sounded fake. Model A's audio clicks were also more noticeable. Overall, Model B's steady tone made it the stronger choice." (Votado: Task Success A = fail)
 
 *Por qué es Inaceptable:* El evaluador marca la tarea del Modelo A como fail (fallida) porque sonó falso y tuvo clics. Pero si el Modelo A sí dio la comparación de productos que se pedía, la tarea fue exitosa. El error de sonar falso se castiga en Naturalness/Audio Quality, no en Task Success.
+
+**Caso 4: Ignorar Tech Issues pese a mencionar restart y pausas**
+> "I prefer Model B since it consistently held both accents... Model A tried both accents but dropped the persona in the final turns, never sounding as natural; it also restarted mid-response once and paused noticeably before another answer..." (Votado: Tech Issues A = —, Task Success A = partial)
+
+*Por qué es Inaceptable:* El texto menciona explícitamente "restarted mid-response once" (reinicio) y "paused noticeably" (pausa anormal), que son **Tech Issues** claros. Pero el voto marca Tech Issues A = — (no marcado). Contradicción directa: si se describe un reinicio o pausa anormal en la justificación, la casilla de Tech Issues DEBE marcarse. La regla del espejo se rompe. (El Task Success A = partial por dropeo de personaje sí está bien, pero el Tech Issues ignorado invalida la evaluación.)
