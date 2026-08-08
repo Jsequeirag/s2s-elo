@@ -110,11 +110,16 @@ export async function callOpenRouter(
     body.thinking = { type: "disabled" };
   }
 
-  // Low reasoning effort for OpenAI reasoning models (o-series, Luna) so
-  // they reserve most tokens for the actual output instead of the internal
-  // chain-of-thought. Non-OpenAI reasoning models reject this parameter.
+  // Reasoning-mode handling. Several reasoning-capable models will enter an
+  // infinite reasoning loop and exhaust the token budget, leaving nothing
+  // for the actual answer (known GLM-4.6 / GLM-4.6V behavior on OpenRouter).
+  // Two distinct cases:
+  //  - OpenAI o-series / Luna: accept effort levels -> cap at "low".
+  //  - GLM (z-ai/glm-*): accept an enabled flag -> disable entirely.
   if (/^openai\/o\d/i.test(model) || /\/luna\b/i.test(model)) {
     body.reasoning = { effort: "low" };
+  } else if (/\/glm[\-.]/i.test(model) || /^z-ai\//i.test(model)) {
+    body.reasoning = { enabled: false };
   }
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
