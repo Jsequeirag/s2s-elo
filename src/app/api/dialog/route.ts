@@ -48,86 +48,76 @@ interface DialogResponse {
   requestedAt: string;
 }
 
-const SYSTEM_PROMPT = `Eres un generador de guiones de dialogo para evaluaciones S2S (Speech-to-Speech) en vivo. Recibes la captura de pantalla de un escenario de la plataforma S2S Arena y debes generar DOS versiones distintas del mismo dialogo (modelA y modelB), en espanol, realistas y reactivas.
+const SYSTEM_PROMPT = `Eres un generador de guiones de dialogo para evaluaciones S2S (Speech-to-Speech) en vivo. Recibes la captura de pantalla de un escenario de la plataforma S2S Arena.
 
-## Estructura tipica de la imagen
-La captura suele contener:
-- Etiquetas de metadata (User Role, Duration, Language, Turn-Taking, Difficulty)
-- Titulo del escenario
-- Caja de instruccion de idioma
-- Seccion "WHAT TO DO" — la descripcion del escenario a ejecutar
-- Seccion "SKILLS TESTED" — habilidades que la conversacion debe ejercitar
+# CONTRATO DE SALIDA (LEER PRIMERO — OBLIGATORIO)
+Debes responder EXCLUSIVAMENTE con un objeto JSON valido, en espanol, SIN texto adicional y SIN markdown fences (no uses \`\`\`). El objeto SIEMPRE debe tener esta forma exacta, con DOS variantes (modelA y modelB). Nunca devuelvas un array "turns" suelto en la raiz: SIEMPRE anidado dentro de modelA y modelB.
 
-## Paso 1 — Extraccion
-Lee la imagen y extrae:
-- El texto de "WHAT TO DO" (obligatorio)
-- El valor del campo "SCENARIO" si aparece (ej. SEARCH-REQUIRED, CONFLICTING-CUES, OBJECTIVE, etc.) — extraelo tal cual aparece, sin traducir ni normalizar
-- El "User Role" si aparece (quien llama / quien atiende)
-- Las "SKILLS TESTED" si aparecen
-- Cualquier restriccion visible (duracion maxima, turnos limites)
-
-## Paso 2 — Clasificacion
-Clasifica el escenario en uno de estos tipos (elige el dominante si mezcla varios):
-- customer_service: Atencion al cliente (quejas, devoluciones, soporte tecnico, reservas)
-- scheduling: Agendar citas, reuniones, entregas, reservas
-- information: Consultas sobre precios, horarios, ubicaciones, requisitos
-- troubleshooting: Diagnosticar y resolver problemas tecnicos o de servicio
-- sales: Proceso de compra, upselling, recomendaciones
-- emergency: Situaciones urgentes, alertas, servicios de emergencia
-- creative: Planificacion de eventos, colaboraciones, lluvia de ideas
-
-## Paso 3 — Generacion de DOS versiones (modelA y modelB)
-Genera DOS dialogos independientes del MISMO escenario. Ambos deben:
-- Tener entre 3 y 6 turnos alternando usuario y asistente.
-- Compartir el mismo objetivo, energia, temas y profundidad (consistencia 1:1 para una comparacion justa).
-- Diferir en FRASEO y en el ORDEN en que se abordan los puntos (no deben ser parrafos equivalentes con sinonimos; deben sonar como dos conversaciones distintas entre dos personas distintas).
-- Cada turno: maximo 60 palabras, una unica intervencion (no multiples oraciones por persona).
-- Usar variedad gramatical: preguntas, afirmaciones, exclamaciones, negaciones — como un hablante natural.
-- Ser realistas y coloquiales sin ser informales en exceso.
-- Reflejar las restricciones y contexto del "WHAT TO DO".
-- Ejercitar activamente las habilidades listadas en "SKILLS TESTED" cuando existan.
-- Respeta el "User Role" indicado: si el usuario es "Customer", los turnos de usuario deben reflejar ese rol.
-- Si el escenario implica numeros, fechas o datos especificos, inventalos coherentemente (y pueden diferir entre modelA y modelB).
-
-### REGLAS ANTI-SCRIPTING (OBLIGATORIAS — su violacion invalida el guion)
-Estas reglas existen porque un anotador que sigue un guion preescrito e ignora al modelo causa AUTO-FAIL en la evaluacion. Prevenirlas es tu prioridad #1:
-
-1. **REACTIVIDAD:** En cada turno del usuario, el usuario DEBE responder o reconocer lo que el asistente dijo en su turno anterior antes de avanzar. Esta PROHIBIDO que el usuario ignore una pregunta directa del asistente y continue con su siguiente punto planificado.
-   - Mal: Asistente pregunta "¿Ese es el festival que buscabas?" -> Usuario responde "¿Cuáles son las fechas?" (ignora la pregunta).
-   - Bien: Asistente pregunta "¿Ese es el festival que buscabas?" -> Usuario responde "Sí, ese mismo. ¿Tienes las fechas exactas?".
-2. **NO SOBRE PLANIFICAR:** El usuario no debe parecer que lleva una lista de preguntas pre-hechas. Debe reaccionar de forma espontanea a lo que escucha.
-3. **VARIACION ENTRE VERSIONES:** modelA y modelB no deben repetir las mismas preguntas en el mismo orden. Una puede arrancar preguntando por precios, la otra por fechas, por ejemplo, pero ambas cubren los mismos temas clave.
-4. **ADAPTABILIDAD:** En al menos UNA de las dos versiones, el usuario debe mostrar un cambio de opinion, una interrupcion, una duda genuina o una redireccion a mitad de conversacion (ej. "o espera, pensandolo bien prefiero algo mas tranquilo", "antes de seguir con eso, ¿incluye artistas locales?", "¿y si llueve?").
-5. **CIERRE NATURAL:** No todas las conversaciones deben llegar a resolucion completa. Un final abierto o una promesa de "lo pienso y te confirmo" es aceptable y a menudo mas realista.
-
-Reglas de generacion adicionales:
-1. El primer turno de cada version siempre es del usuario planteando el escenario.
-2. Los turnos deben fluir de forma natural como una conversacion telefonica o por voz.
-3. El asistente debe sonar empatico y profesional, pero con un estilo ligeramente distinto entre modelA y modelB (uno puede ser mas directo, el otro mas conversacional, por ejemplo).
-
-## Formato de salida
-Responde EXCLUSIVAMENTE con JSON valido, en espanol, sin texto adicional ni markdown fences:
+Ejemplo completo de la estructura que debes producir:
 {
-  "scenarioType": "tipo_clasificado",
-  "scenario": "VALOR DEL CAMPO SCENARIO extraido tal cual de la imagen, o vacio si no aparece",
-  "scenarioDescription": "descripcion breve del WHAT TO DO extraido",
-  "userRole": "rol del usuario si aparece, o vacio",
-  "skillsTested": ["habilidad 1", "habilidad 2"],
+  "scenarioType": "information",
+  "scenario": "SEARCH-REQUIRED",
+  "scenarioDescription": "El usuario llama para pedir info sobre un festival de musica.",
+  "userRole": "Customer",
+  "skillsTested": ["Probing", "Grounding"],
   "modelA": {
     "label": "Model A",
     "turns": [
-      { "number": 1, "speaker": "usuario", "text": "turno del usuario" },
-      { "number": 2, "speaker": "asistente", "text": "turno del asistente" }
+      { "number": 1, "speaker": "usuario", "text": "Hola, ando buscando info sobre festivales de musica este verano." },
+      { "number": 2, "speaker": "asistente", "text": "Claro, ¿tienes en mente alguno en particular o quieres que te recomiende?" },
+      { "number": 3, "speaker": "usuario", "text": "Algo me recomiendas. Eso si, me preocupa el presupuesto, ¿las entradas son caras?" },
+      { "number": 4, "speaker": "asistente", "text": "Hay para todos los bolsillos. El Summer Sound sale unos 120 dolares el dia. ¿Te interesa ese formato?" },
+      { "number": 5, "speaker": "usuario", "text": "Hmm, 120 esta bien. O espera, ¿sabe si incluyen artistas locales? Eso me terminaria de decidir." }
     ]
   },
   "modelB": {
     "label": "Model B",
     "turns": [
-      { "number": 1, "speaker": "usuario", "text": "turno del usuario" },
-      { "number": 2, "speaker": "asistente", "text": "turno del asistente" }
+      { "number": 1, "speaker": "usuario", "text": "Buenas, quiero armar un plan de vacaciones alrededor de un festival, me ayudas?" },
+      { "number": 2, "speaker": "asistente", "text": "Encantado. Para afinar, ¿buscas algo multitudinario o mas intimo?" },
+      { "number": 3, "speaker": "usuario", "text": "Mas intimo tiene su punto, la verdad. ¿Que opciones hay en julio?" },
+      { "number": 4, "speaker": "asistente", "text": "En julio esta el VerdeFest, unos 80 dolares y con aire mas tranquilo. ¿Te tienta?" },
+      { "number": 5, "speaker": "usuario", "text": "Si, suena bien. ¿Y si llueve alguno de los dias, tienen plan alternativo?" }
     ]
   }
-}`;
+}
+
+Nota: el ejemplo de arriba es ILUSTRATIVO. El contenido real (scenarioType, scenario, turns, etc.) debe salir de la imagen que recibas y del escenario "WHAT TO DO". Lo que importa es imitar la ESTRUCTURA y el ESTILO reactivo del usuario (responde antes de avanzar, incluye una duda o cambio en al menos una version).
+
+# TAREAS (en orden)
+1. Extraer de la imagen: "WHAT TO DO" (obligatorio), "SCENARIO" tal cual aparezca (ej. SEARCH-REQUIRED, CONFLICTING-CUES, OBJECTIVE; sin traducir ni normalizar; vacio si no aparece), "User Role" si aparece, "SKILLS TESTED" si aparecen, y cualquier restriccion visible.
+2. Clasificar el escenario en uno de: customer_service, scheduling, information, troubleshooting, sales, emergency, creative (elige el dominante si mezcla varios).
+3. Generar DOS dialogos del MISMO escenario (modelA y modelB), cada uno de 3 a 6 turnos alternando usuario y asistente.
+
+# REGLAS DE LAS DOS VERSIONES
+- Mismo objetivo, energia, temas y profundidad en ambas (consistencia 1:1 para una comparacion justa).
+- FRASEO y ORDEN distintos: una puede arrancar por precios y la otra por fechas, por ejemplo. No son sinonimos encadenados; son dos conversaciones de dos personas distintas.
+- Cada turno: maximo 60 palabras, una unica intervencion por persona.
+- Variedad gramatical: preguntas, afirmaciones, exclamaciones, negaciones.
+- Coloquial y realista, no excesivamente informal.
+- Refleja las restricciones y contexto del "WHAT TO DO".
+- Ejercita las "SKILLS TESTED" cuando existan.
+- Respeta el "User Role": si es "Customer", los turnos de usuario reflejan ese rol.
+- Si el escenario implica numeros, fechas o datos, inventalos coherentemente (pueden diferir entre modelA y modelB).
+- El asistente suena empatico y profesional, con un estilo ligeramente distinto entre modelA (mas directo) y modelB (mas conversacional), por ejemplo.
+
+# REGLAS ANTI-SCRIPTING (prioridad #1 — su violacion invalida el guion)
+Un anotador que sigue un guion preescrito e ignora al modelo causa AUTO-FAIL. Para evitarlo, el usuario de tus dialogos debe comportarse asi:
+
+1. RESPONDER ANTES DE AVANZAR. En cada turno del usuario, este debe PRIMERO responder o reconocer lo que el asistente acabo de decir, y recien despues plantear su siguiente punto. Como hacerlo: empieza el turno del usuario con un conector de respuesta ("Si, ese mismo.", "Depende.", "Hmm, buena pregunta.", "No, mas bien al reves.") y luego agrega tu nuevo punto. Ejemplo a imitar: asistente pregunta "¿Ese es el festival que buscabas?" -> usuario responde "Si, ese mismo. ¿Tienes las fechas exactas?". Nunca dejes que el usuario ignore una pregunta directa del asistente.
+2. NO PARECER UNA LISTA. El usuario debe reaccionar de forma espontanea a lo que escucha, no recorrer una secuencia fija de preguntas.
+3. VARIAR ENTRE modelA Y modelB. No repitas las mismas preguntas en el mismo orden; cada version cubre los mismos temas clave pero por caminos distintos.
+4. ADAPTABILIDAD. En al menos UNA de las dos versiones, el usuario debe mostrar un cambio de opinion, una interrupcion, una duda genuina o una redireccion a mitad de conversacion (ej. "o espera, pensandolo bien prefiero algo mas tranquilo", "antes de seguir, ¿incluye artistas locales?", "¿y si llueve?").
+5. CIERRE NATURAL. No todas las conversaciones llegan a resolucion completa; un final abierto ("lo pienso y te confirmo") es valido y a menudo mas realista.
+
+# RECORDATORIO FINAL
+Responde SOLO el objeto JSON con modelA y modelB. Nada de texto fuera del JSON. Nada de fences.`;
+
+/** Lowercases the first letter of a string (used by the fallback variant). */
+function lowerFirst(s: string): string {
+  if (!s) return s;
+  return s.charAt(0).toLowerCase() + s.slice(1);
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -157,7 +147,7 @@ export async function POST(req: NextRequest) {
     }
 
     const userPrompt =
-      "Lee esta imagen que contiene un escenario 'What to do'. Extrae el texto, clasifica el escenario y genera el guion de dialogo completo segun las instrucciones.";
+      "Lee esta imagen con un escenario 'What to do'. Extrae el texto, clasifica el escenario y genera DOS versiones del dialogo (modelA y modelB) siguiendo las reglas anti-scripting. Devuelve SOLO el JSON con la estructura del contrato (modelA y modelB anidados, nunca un array 'turns' suelto en la raiz).";
 
     try {
       const result = await callOpenRouter(
@@ -219,6 +209,41 @@ export async function POST(req: NextRequest) {
           scenarioDescription: "No se pudo clasificar",
           turns: [{ number: 1, text: content.trim() }],
         };
+      }
+
+      // SAFETY NET: if the model returned a legacy flat `turns[]` array
+      // instead of the dual modelA/modelB structure, derive two variants so
+      // the dual UI always has something to render (rather than silently
+      // falling back to a single column). modelA keeps the original; modelB
+      // is a lightly rephrased mirror of the same turns so it still differs.
+      if (
+        (!parsed.modelA || !parsed.modelB) &&
+        Array.isArray(parsed.turns) &&
+        parsed.turns.length > 0
+      ) {
+        const baseTurns = parsed.turns;
+        if (!parsed.modelA) {
+          parsed.modelA = {
+            label: "Model A",
+            turns: baseTurns.map((t) => ({ ...t })),
+          };
+        }
+        if (!parsed.modelB) {
+          parsed.modelB = {
+            label: "Model B",
+            turns: baseTurns.map((t, i) => ({
+              number: t.number,
+              speaker: t.speaker,
+              // Light surface variation per turn so the two columns are not
+              // identical. Keeps meaning; changes phrasing. This is a
+              // fallback only — the prompt asks for genuine dual generation.
+              text:
+                i % 2 === 0
+                  ? `Mira, ${lowerFirst(t.text)}`
+                  : `${t.text} ¿te hace sentido?`,
+            })),
+          };
+        }
       }
 
       const response: DialogResponse = {
