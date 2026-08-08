@@ -50,6 +50,26 @@ Al final de tu respuesta, le darás al usuario un breve diagnóstico de por qué
 
 *Por qué es Excepcional:* Destaca la dimensión de Naturalness/Aesthetics usando el término "immersive delivery". Separa perfectamente la utilidad (receta correcta = Tie) de la actuación (más envolvente = Model B). Coherencia total al marcar Tie en Audio.
 
+**Caso 3: Hallucinación Factual y Task Success Partial (Neurociencia)**
+> "I prefer Model B overall since it maintained a fluid, natural delivery while covering the neuroscience of fear with technical depth. Model A paused and overused filler sounds like 'let me see', which hurt naturalness. Critically, Model A hallucinated, stating the amygdala directly releases cortisol when the HPA axis triggers it — a factual error that caps its task success at partial. Both had minor background clicks. Model B wins." (449 caracteres)
+
+*Por qué es Excepcional:* Es el único caso que muestra **hallucination factual específica** (amígdala vs HPA axis) y cómo penalizarla correctamente con **taskSuccess = partial** (ni pass ni fail). Demuestra que Utility es independiente de Naturalness: un modelo puede sonar bien y fallar factualmente. Vocabulario experto ("filler sounds", "hallucinated", "HPA axis").
+
+**Caso 4: Acento No-Nativo como Penalización de Naturalness (Sin Pronombres)**
+> "I prefer Model B since it sounded like a native Spanish speaker and kept the conversation natural. Model A carried a noticeable non-native accent that made the delivery feel artificial and broke immersion. Both followed the no-pronouns constraint and understood the context well, and audio quality was clean for both with only minor clicks. Model B is better overall due to its more authentic, native delivery." (417 caracteres)
+
+*Por qué es Excepcional:* Cubre el vacío del **acento no-nativo**: no es un error técnico ni de Task Success, sino una penalización de **Naturalness / Engagement / Aesthetics** (la V3 lo confirma en su sección 8.1). Muestra que un modelo puede cumplir la tarea (pass) y tener audio limpio, pero perder por autenticidad lingüística.
+
+**Caso 5: Audio Quality como Decisor cuando Naturalness está empatado**
+> "I prefer Model A, it's more natural and engaging, and the conversation felt more spontaneous. Both models were able to follow the conversation without any problems. Model B was flatter, and its audio quality also had some strong clicks that almost disturbed the voice. Overall, Model A is better." (301 caracteres)
+
+*Por qué es Excepcional:* Muestra el caso donde **Audio Quality sí decide** el voto (no siempre es Tie). Los "strong clicks that almost disturbed the voice" son artefactos mayores que justifican dar el punto a A. NOTA: los artefactos deben describirse con precisión ("almost disturbed the voice"), no con vaguedades.
+
+**Caso 6: Dropeo de Personaje en Turnos Finales + Tech Issues (Acento Norteño)**
+> "I prefer Model B since it consistently held both accents I requested (norteño and costeño) across all turns, using regional vocabulary like 'órale pues' naturally. Model A tried both accents but dropped the persona in the final turns, never sounding as natural; it also restarted mid-response once and paused noticeably before another answer. Both models stayed coherent, so utility was equal. Model B wins on naturalness and accent consistency." (432 caracteres)
+
+*Por qué es Excepcional:* Cubre dos lecciones a la vez: (1) **Dropeo de personaje en turnos finales** = Task Success **partial** (el modelo no sostuvo el rol). (2) "restarted mid-response once" y "paused noticeably" son **Tech Issues** que DEBEN marcarse (a diferencia del Caso 5, donde los clicks no justificaron marcar Tech Issues porque no se mencionaron como defectos del modelo). Demuestra consistencia de rol como dimensión de Naturalness.
+
 ### 🚫 Ejemplos Inaceptables (Referencias de Errores Fatales)
 
 **Caso 1: Contradicción en Audio Quality y Errores de Tipeo**
